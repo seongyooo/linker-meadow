@@ -21,7 +21,11 @@
   :root { --ink: #242A4A; --ink-2: #4A4F6E; --gold: #FFDB80; --gold-ink: #A8681F; }
   html, body { margin: 0; height: 100%; overflow: hidden; }
   body {
-    background: linear-gradient(180deg, #5596D6 0%, #7FB0DF 26%, #B4C8D2 52%, #DCDDD6 72%, #E7E6DE 100%);
+    /* Chapter 7's sky (sampled from the game): deep blue overhead, the sun's warm haze low on one side, the clouds'
+       blue-grey under it all. */
+    background:
+      radial-gradient(60% 34% at 12% 54%, rgba(255, 236, 196, .75), rgba(255, 236, 196, 0) 70%),
+      linear-gradient(180deg, #0567C0 0%, #4A88CC 15%, #96B2CD 30%, #D3D1C3 45%, #EAE1C8 55%, #DCD6C5 65%, #C3C7C6 78%, #ADB7C3 90%, #A4AEC0 100%);
     color: var(--ink); font: 500 15px/1.4 "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     -webkit-user-select: none; user-select: none;
   }
@@ -61,6 +65,16 @@
   .done button { font: inherit; color: #fff; background: var(--ink); border: 0; border-radius: 16px; padding: 7px 16px; cursor: pointer; }
   .done button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   body.og .head, body.og .cue, body.og .core-count { display: none; }
+  /* The music (chapter 7's), on from the first touch unless turned off; the button at the foot's right. */
+  .sound { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 5;
+    width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(36, 42, 74, .18); background: rgba(251, 248, 241, .85);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--ink); cursor: pointer; display: grid; place-items: center;
+    box-shadow: 0 8px 24px -12px rgba(36, 42, 74, .5); }
+  .sound svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .sound .on { display: none; }
+  .sound[aria-pressed="true"] .on { display: inline; }
+  .sound[aria-pressed="true"] .off { display: none; }
+  .sound:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -68,6 +82,48 @@
 <div class="head"><small id="stageNo">STAGE 1</small><b id="count">0 / 2</b><span id="hint"></span></div>
 <div class="cue" id="cue" role="status"><svg id="cuePic" viewBox="0 0 34 34" aria-hidden="true"></svg><span id="cueText"></span></div>
 <div class="done" id="done" role="status"><span id="doneText"></span><button type="button" id="next">다음 단계</button></div>
+<button type="button" class="sound" id="sound" aria-pressed="false" aria-label="음악 켜기">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><g class="on"><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18 6.5a7.8 7.8 0 0 1 0 11"/></g><path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+</button>
+<audio id="music" src="assets/audio/meadow.m4a" loop preload="auto"></audio>
+<script>
+  // The music: chapter 7's, faded in at the first touch of the page (browsers allow sound only after one), unless the
+  // reader turned it off before (remembered); the button turns it on and off; quiet while the tab is hidden.
+  (() => {
+    const music = document.getElementById('music'), button = document.getElementById('sound');
+    let off = false;
+    try { off = localStorage.getItem('linker-meadow.musicOff') === '1'; } catch (e) { /* none */ }
+    let fade = 0;
+    const show = (on) => { button.setAttribute('aria-pressed', on ? 'true' : 'false'); button.setAttribute('aria-label', on ? '음악 끄기' : '음악 켜기'); };
+    const play = () => {
+      music.volume = 0;
+      music.play().then(() => {
+        show(true);
+        cancelAnimationFrame(fade);
+        const t0 = performance.now();
+        const step = () => { music.volume = Math.min(0.55, (performance.now() - t0) / 2500 * 0.55); if (music.volume < 0.55) fade = requestAnimationFrame(step); };
+        fade = requestAnimationFrame(step);
+      }).catch(() => show(false));
+    };
+    const stop = () => { cancelAnimationFrame(fade); music.pause(); show(false); };
+    const first = (e) => {
+      if (e.target.closest && e.target.closest('#sound')) return;   // (the button's own click decides)
+      removeEventListener('pointerdown', first, true);
+      if (!off && music.paused) play();
+    };
+    addEventListener('pointerdown', first, true);
+    button.addEventListener('click', () => {
+      removeEventListener('pointerdown', first, true);
+      off = !music.paused;
+      try { localStorage.setItem('linker-meadow.musicOff', off ? '1' : '0'); } catch (e) { /* none */ }
+      off ? stop() : play();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) music.pause();
+      else if (!off && button.getAttribute('aria-pressed') === 'true') music.play().catch(() => {});
+    });
+  })();
+</script>
 <script type="module">
   import { start } from './js/meadow3d.js';
   const $ = (id) => document.getElementById(id);

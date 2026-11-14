@@ -498,20 +498,33 @@ export async function start(root, ui) {
   // ---- The clouds: a sea of them under the islands (not a band across the screen), the colour of the sky's foot,
   // thinning out far off into the sky; the islands' roots and a dropped Linker go down into it.
   const lowest = Math.min(...islands.map((i) => i.top));
-  const clouds = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false,
-    uniforms: { uCentre: { value: new THREE.Vector2() } },
-    vertexShader: `varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: `uniform vec2 uCentre; varying vec3 vW;
-      void main() {
-        float far = smoothstep(7.0, 22.0, length(vW.xz - uCentre));
-        gl_FragColor = vec4(0.906, 0.902, 0.871, 0.96 * (1.0 - far));
-      }`,
-  }));
-  clouds.rotation.x = -Math.PI / 2;
-  clouds.position.y = lowest - 1.9;
-  clouds.renderOrder = 1;
-  world.add(clouds);
+  // (Two layers of soft heaped cloud, lit warm from above and blue-grey in their hollows, drifting slowly.)
+  const CLOUD_FRAG = `uniform vec2 uCentre; uniform float uTime; uniform float uSeed; varying vec3 vW;
+    float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeed) * 43758.5453); }
+    float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+    float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 5; k++) { s += a * n(p); p *= 2.03; a *= 0.5; } return s; }
+    void main() {
+      vec2 q = vW.xz * 0.16 + vec2(uTime * 0.012, uTime * 0.006);
+      float c = fbm(q + fbm(q * 0.6) * 0.8);
+      float puff = smoothstep(0.38, 0.72, c);
+      vec3 col = mix(vec3(0.66, 0.71, 0.78), vec3(1.0, 0.97, 0.91), smoothstep(0.45, 0.85, c));
+      float far = smoothstep(9.0, 26.0, length(vW.xz - uCentre));
+      gl_FragColor = vec4(col, (0.35 + 0.6 * puff) * (1.0 - far));
+    }`;
+  const cloudLayers = [[1.9, 0.0], [3.0, 7.3]].map(([down, seed], k) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: { uCentre: { value: new THREE.Vector2() }, uTime: { value: 0 }, uSeed: { value: seed } },
+      vertexShader: `varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: CLOUD_FRAG,
+    }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = lowest - down;
+    m.renderOrder = 1 - k;
+    world.add(m);
+    return m;
+  });
 
   // ---- The view.
   // Framed on this stage's islands: their middle, wide enough for all of them across the screen.
@@ -930,7 +943,7 @@ export async function start(root, ui) {
     look.pitch = damp(look.pitch, look.tpitch, 12, dt);
     look.zoom = damp(look.zoom, look.tzoom, 10, dt);
     centre.lerp(tcentre, 1 - Math.exp(-12 * dt));
-    clouds.material.uniforms.uCentre.value.set(centre.x, centre.z);
+    for (const c of cloudLayers) { c.material.uniforms.uCentre.value.set(centre.x, centre.z); c.material.uniforms.uTime.value = now / 1000; }
     place();
     windDir.lerp(tmp.set(fwd.x, 0, fwd.z).normalize(), 1 - Math.exp(-3 * dt)).normalize();
     for (const l of linkers) l.scr = toScreen(l.pos.clone().addScaledVector(Y, H * 0.5));
