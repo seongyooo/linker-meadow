@@ -617,10 +617,10 @@ export async function start(root, ui) {
   });
   // Turning, moving and zooming the view by hand.
   const drags = new Map();          // pointer id -> { x, y, pan }
-  let pinch = 0;
+  let pinch = 0, twist = null;
   function startView(e) {
     drags.set(e.pointerId, { x: e.clientX, y: e.clientY, pan: e.button === 1 || e.shiftKey });
-    if (drags.size === 2) { const [a, b] = [...drags.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+    if (drags.size === 2) { const [a, b] = [...drags.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); twist = Math.atan2(b.y - a.y, b.x - a.x); }
     canvas.setPointerCapture?.(e.pointerId);
     e.preventDefault();          // (the middle button's page scrolling, the right's menu)
   }
@@ -630,11 +630,19 @@ export async function start(root, ui) {
     if (!d) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (drags.size === 2) {
-      // Two fingers: apart or together to zoom, both along to move.
-      const others = [...drags.entries()].filter(([id]) => id !== e.pointerId)[0][1];
-      const span = Math.hypot(e.clientX - others.x, e.clientY - others.y);
+      // Two fingers: apart or together to zoom, round about each other to turn, both along to move.
+      const [first, second] = [...drags.entries()];
+      const a = first[0] === e.pointerId ? { x: e.clientX, y: e.clientY } : first[1];
+      const b = second[0] === e.pointerId ? { x: e.clientX, y: e.clientY } : second[1];
+      const span = Math.hypot(b.x - a.x, b.y - a.y);
       if (pinch > 0) { look.tzoom = clamp(look.tzoom * pinch / span, 0.45, 1.8); tell('zoom'); }
       pinch = span;
+      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      if (twist !== null) {
+        const turn = ((angle - twist + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        if (Math.abs(turn) > 0.002) { look.tyaw += turn; tell('turn'); }
+      }
+      twist = angle;
       pan(dx / 2, dy / 2);
     } else if (d.pan) {
       pan(dx, dy);
@@ -646,7 +654,7 @@ export async function start(root, ui) {
     }
     d.x = e.clientX; d.y = e.clientY;
   });
-  const endView = (e) => { drags.delete(e.pointerId); pinch = 0; };
+  const endView = (e) => { drags.delete(e.pointerId); pinch = 0; twist = null; };
   canvas.addEventListener('pointerup', endView);
   canvas.addEventListener('pointercancel', endView);
   canvas.addEventListener('wheel', (e) => {
