@@ -163,7 +163,7 @@ function groupedGeometry(mesh) {
 
 // The stages, each with one new thing, its islands laid as the game's maps (rows along z, a digit a cell's height
 // in half blocks, '.' none; at = where its first cell sits, [x, y, z]; props on cells, the cells under them not
-// walked). 1: a tutorial; 2: two signs, the view turned; 3: an island hidden behind a ruin; 4: an island that moves;
+// walked). 1: a tutorial; 2: two signs, the view turned; 3: an island hidden behind a tower; 4: an island that moves;
 // 5: all of it.
 const LEVELS = [
   { signs: { circle: 2 }, flee: 0, hint: '링커를 잡아 ○ 섬으로 옮겨 보세요', islands: [
@@ -177,8 +177,8 @@ const LEVELS = [
   ] },
   { signs: { circle: 3, triangle: 3, square: 3 }, flee: 0.8, hint: '어딘가 숨은 섬이 있어요. 시점을 돌려 찾아보세요', islands: [
     { start: true, at: [-2, 0, -2], map: ['0000', '0000', '0000', '0000'] },
-    // The ruin: a temple on a rock behind the start, the triangle's island out of sight behind it.
-    { at: [3, 0, -4], map: ['22', '22'], props: [{ piece: 'RuneTemple', cell: [0, 0], dx: 0.5, dz: 0.5, yaw: -45, block: [[0, 0], [1, 0], [0, 1], [1, 1]] }] },
+    // A tower of the meadow's blocks behind the start, the triangle's island out of sight behind it.
+    { at: [3, 0, -4], map: ['86', '97'] },
     { sign: 'triangle', at: [6, -0.5, -9], map: ['000', '000', '00.'], props: [{ piece: 'SignTriangle', cell: [0, 0], yaw: 45, scale: 1.2 }] },
     { sign: 'circle', at: [-9, 0.5, -6], map: ['000', '000', '.00'], props: [{ piece: 'SignCircle', cell: [2, 2], yaw: 45, scale: 1.2 }] },
     { sign: 'square', at: [4, 0.5, 4], map: ['000', '00.', '000'], props: [{ piece: 'SignSquare', cell: [0, 2], yaw: 45, scale: 1.2 }] },
@@ -194,7 +194,7 @@ const LEVELS = [
   { signs: { circle: 5, triangle: 5, square: 5 }, flee: 1, hint: '지금까지의 섬이 모두 모였어요. 모두 제자리를 찾아 주세요', islands: [
     { start: true, at: [-3, 0, -3], map: ['22100', '22100', '11000', '00000', '00000'],
       props: [{ piece: 'BrokenRing', cell: [3, 3], dx: 0.5, dz: 0.5, yaw: -45, scale: 0.6, block: [[3, 3], [4, 4]] }] },
-    { at: [3, 0, -6], map: ['22', '22'], props: [{ piece: 'RuneTemple', cell: [0, 0], dx: 0.5, dz: 0.5, yaw: -45, block: [[0, 0], [1, 0], [0, 1], [1, 1]] }] },
+    { at: [3, 0, -6], map: ['86', '97'] },
     { sign: 'triangle', at: [6, -0.5, -11], map: ['0000', '0011', '0011'], props: [{ piece: 'SignTriangle', cell: [0, 0], yaw: 45, scale: 1.2 }] },
     { sign: 'circle', at: [-11, 0.5, -8], map: ['0000', '0...', '0000'], props: [{ piece: 'SignCircle', cell: [3, 0], yaw: 45, scale: 1.2 }] },
     { sign: 'square', at: [6, 0.5, 6], map: ['000', '000'], move: { dir: [1, 0, 1], amp: 2.2, period: 10 },
@@ -581,7 +581,7 @@ export async function start(root, ui) {
   // ---- The clouds: a sea of them under the islands (not a band across the screen), the colour of the sky's foot,
   // thinning out far off into the sky; the islands' roots and a dropped Linker go down into it.
   const lowest = Math.min(...islands.map((i) => i.base.y));
-  // (Two layers of soft heaped cloud, lit warm from above and blue-grey in their hollows, drifting slowly.)
+  // (Two layers of soft heaped cloud, white and lit warm from above, a pale sky blue in their hollows, drifting slowly.)
   // (A hash without sin, which some phones' GPUs compute too coarsely to make any cloud at all.)
   const CLOUD_FRAG = `precision highp float;
     uniform vec2 uCentre; uniform float uTime; uniform float uSeed; varying vec3 vW;
@@ -593,9 +593,9 @@ export async function start(root, ui) {
       vec2 q = vW.xz * 0.16 + vec2(uTime * 0.012, uTime * 0.006);
       float c = fbm(q + fbm(q * 0.6) * 0.8);
       float puff = smoothstep(0.34, 0.66, c);
-      vec3 col = mix(vec3(0.62, 0.68, 0.77), vec3(1.0, 0.98, 0.93), smoothstep(0.42, 0.8, c));
+      vec3 col = mix(vec3(0.84, 0.89, 0.96), vec3(1.0, 0.99, 0.96), smoothstep(0.38, 0.72, c));
       float far = smoothstep(10.0, 30.0, length(vW.xz - uCentre));
-      gl_FragColor = vec4(col, (0.45 + 0.55 * puff) * (1.0 - far));
+      gl_FragColor = vec4(col, (0.3 + 0.65 * puff) * (1.0 - far));
     }`;
   const cloudLayers = [[1.9, 0.0], [3.0, 7.3]].map(([down, seed], k) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.ShaderMaterial({
