@@ -7,8 +7,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { material, geometry } from './linker3d.js?v=5';
+import { makeToys } from './toys.js?v=1';
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+let skew = 0;
+const nowMs = () => performance.now() + skew;
 const damp = (a, b, rate, dt) => b + (a - b) * Math.exp(-rate * dt);
 const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
@@ -202,10 +205,20 @@ const LEVELS = [
   ] },
 ];
 const LEVEL = Math.min(LEVELS.length, Math.max(1, Math.floor(+new URLSearchParams(location.search).get('level') || 1)));
-const LV = LEVELS[LEVEL - 1];
+// The playground (?play): one wide meadow with a hill at one corner, a single Linker to begin with (more come from
+// the tray), no signs to sort, nobody running from the pointer; the toys are in js/toys.js.
+const PLAY = new URLSearchParams(location.search).has('play');
+const PLAYGROUND = {
+  signs: { [['circle', 'triangle', 'square'][Math.floor(Math.random() * 3)]]: 1 }, flee: 0, hint: '', islands: [
+    { start: true, at: [-5, 0, -4], map: ['..000000..', '.00000000.', '0000000000', '0000000000', '0000000000', '0000000011', '.000000122', '..0000122.', '...00022..'],
+      props: [{ piece: 'FallenPillar', cell: [8, 7], yaw: 30, scale: 0.8 }] },
+  ],
+};
+const LV = PLAY ? PLAYGROUND : LEVELS[LEVEL - 1];
+const MAX_LINKERS = 16;
 
 export async function start(root, ui) {
-  ui.level(LEVEL, LEVELS.length, LV.hint);
+  ui.level(PLAY ? 0 : LEVEL, LEVELS.length, LV.hint);
   let caughtOnce = false;
   const tell = (what, detail = {}) => { if (what === 'grab') caughtOnce = true; if (ui.event) ui.event(what, detail); };
   const here = new URL('../assets/', import.meta.url);
@@ -404,7 +417,7 @@ export async function start(root, ui) {
     mesh.scale.setScalar(scale);
     stem.add(mesh);
     island.group.add(stem);
-    const s = { stem, lean: THREE.MathUtils.degToRad(lean), phase: x * 1.7 + z * 1.3, island, grow, bloom: grow < 1, born: performance.now() + after, scale };
+    const s = { stem, lean: THREE.MathUtils.degToRad(lean), phase: x * 1.7 + z * 1.3, island, grow, bloom: grow < 1, born: nowMs() + after, scale };
     if (grow < 1) stem.scale.setScalar(0.001);
     swayers.push(s);
     return s;
@@ -469,7 +482,17 @@ export async function start(root, ui) {
   const linkers = [];
   const S = 1;
   const H = 0.73 * S;
-  for (let n = 0; n < COUNT; n++) {
+  const newShade = () => {
+    const m = new THREE.Mesh(shadowGeometry, new THREE.ShaderMaterial({
+      vertexShader: SHADOW_VERT, fragmentShader: SHADOW_FRAG, transparent: true, depthWrite: false,
+      uniforms: { uAlpha: { value: 1 } },
+    }));
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = 2;
+    world.add(m);
+    return m;
+  };
+  function makeLinker(sign) {
     const model = SkeletonUtils.clone(gltf.scene);
     const blink = { value: 0 };
     const bones = {};
@@ -485,7 +508,7 @@ export async function start(root, ui) {
     holder.add(model);
     world.add(holder);
     model.updateMatrixWorld(true);
-    const sign = linkerSigns[n];
+    const top = new THREE.Box3().setFromObject(model).max.y;
     const emblem = new THREE.Mesh(chestSign[sign], signLook);
     emblem.position.set(0, 0.33, 0.132);              // the game's emblem's place on the chest, facing out
     model.add(emblem);
@@ -499,24 +522,21 @@ export async function start(root, ui) {
     const rest = {};
     for (const b of ['Head', 'LeftArm', 'RightArm', 'LeftLeg', 'RightLeg']) rest[b] = bones[b].quaternion.clone();
     // Its shadow (the game's ContactShadow): a soft dark round on the ground under it.
-    const shade = new THREE.Mesh(shadowGeometry, new THREE.ShaderMaterial({
-      vertexShader: SHADOW_VERT, fragmentShader: SHADOW_FRAG, transparent: true, depthWrite: false,
-      uniforms: { uAlpha: { value: 1 } },
-    }));
-    shade.rotation.x = -Math.PI / 2;
-    shade.renderOrder = 2;
-    world.add(shade);
-    linkers.push({
-      shade, sign, puzzledAt: -1e9,
+    const shade = newShade();
+    const l = {
+      shade, sign, top, puzzledAt: -1e9,
       holder, model, bones, mixer, idle, walk, blink, rest,
       island: null, home: null, path: [],
       pos: new THREE.Vector3(), heading: Math.random() * Math.PI * 2, target: null,
       state: 'idle', until: 0, walkW: 0,
       anchor: new THREE.Vector3(), vel: new THREE.Vector3(), lastVel: new THREE.Vector3(), swing: 0, swingVel: 0,
-      blinkAt: performance.now() + Math.random() * 4000, landAt: -1e9, hopAt: -1e9, fleeAt: 0, react: 0.05 + Math.random() * 0.17,
+      blinkAt: nowMs() + Math.random() * 4000, landAt: -1e9, hopAt: -1e9, fleeAt: 0, react: 0.05 + Math.random() * 0.17,
       tired: 0, scr: null,
-    });
+    };
+    linkers.push(l);
+    return l;
   }
+  for (let n = 0; n < COUNT; n++) makeLinker(linkerSigns[n]);
   function spot(isl, avoid) {
     const free = [...isl.cells.values()].filter((c) => !c.blocked);
     const home = isl === startIsland ? reach(free[0]).cells : free;
@@ -532,7 +552,7 @@ export async function start(root, ui) {
       l.island = l.home = startIsland;
       l.pos.copy(spot(startIsland, l));
       l.path = [];
-      l.state = 'idle'; l.until = performance.now() + Math.random() * 2000;
+      l.state = 'idle'; l.until = nowMs() + Math.random() * 2000;
     }
     for (const s of swayers.filter((s) => s.bloom)) world.remove(s.stem);
     swayers.splice(0, swayers.length, ...swayers.filter((s) => !s.bloom));
@@ -542,7 +562,7 @@ export async function start(root, ui) {
   }
 
   // ---- The first stage: a gold ring under one Linker, soft and slowly breathing, until one is caught.
-  const ring = LEVEL === 1 ? new THREE.Mesh(new THREE.RingGeometry(0.34, 0.42, 48), new THREE.MeshBasicMaterial({
+  const ring = !PLAY && LEVEL === 1 ? new THREE.Mesh(new THREE.RingGeometry(0.34, 0.42, 48), new THREE.MeshBasicMaterial({
     color: 0xffd36e, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   })) : null;
   if (ring) { ring.rotation.x = -Math.PI / 2; ring.renderOrder = 3; world.add(ring); }
@@ -670,6 +690,12 @@ export async function start(root, ui) {
   const pointer = { x: -1e4, y: -1e4, at: -1e9, here: false, touch: false };
   let held = null;
   const samples = [];
+  const toys = PLAY ? makeToys({
+    world, shared, material, linkers, Y, S, HIP: 0.1, tileAt, cellWorld, startIsland, lowest,
+    plant: (...a) => plant(...a), FLOWERS, ray, fwd, R, windDir, pointer, pxPerUnit, toScreen,
+    turnBone: (b, qq) => turnBone(b, qq), tell, newShade, now: nowMs,
+  }) : null;
+  const STANDING = PLAY ? ['idle', 'walk', 'flee', 'busy'] : ['idle', 'walk', 'flee'];
   // Turning the view while a Linker is held: with a mouse, the right button pressed as well (the Linker still
   // follows the pointer meanwhile); with fingers, a second finger on the empty sky.
   let chord = null;
@@ -687,11 +713,11 @@ export async function start(root, ui) {
     }
     // While a Linker is held, only the hand holding it moves it.
     if (held && e.pointerId !== held.pointerId) return;
-    Object.assign(pointer, { x: e.clientX, y: e.clientY, at: performance.now(), here: true, touch: e.pointerType === 'touch' });
+    Object.assign(pointer, { x: e.clientX, y: e.clientY, at: nowMs(), here: true, touch: e.pointerType === 'touch' });
   });
   document.addEventListener('pointerout', (e) => { if (!e.relatedTarget) pointer.here = false; });
   canvas.addEventListener('pointerdown', (e) => {
-    Object.assign(pointer, { x: e.clientX, y: e.clientY, at: performance.now(), here: true, touch: e.pointerType === 'touch' });
+    Object.assign(pointer, { x: e.clientX, y: e.clientY, at: nowMs(), here: true, touch: e.pointerType === 'touch' });
     // With a mouse the view is the right button's (turn; with Shift, or the middle button, move) and the left's
     // only catches Linkers; a finger does both, as before.
     if (e.pointerType === 'mouse' && e.button !== 0) { startView(e); return; }
@@ -700,17 +726,29 @@ export async function start(root, ui) {
     // The nearest Linker under the pointer (its body on screen).
     let best = null, bestD = 0.42 * pxPerUnit();
     for (const l of linkers) {
-      if (!['idle', 'walk', 'flee'].includes(l.state)) continue;
-      const c = toScreen(l.pos.clone().addScaledVector(Y, H * 0.5));
+      if (!STANDING.includes(l.state)) continue;
+      const c = toScreen(l.holder.position.clone().addScaledVector(Y, H * 0.5));
       const d = Math.hypot(c.x - e.clientX, (c.y - e.clientY) * 0.7);
       if (d < bestD) { best = l; bestD = d; }
     }
-    if (!best) { if (e.pointerType !== 'mouse') startView(e); return; }
-    held = best;
+    if (!best) {
+      if (toys && e.pointerType === 'mouse' && toys.grab(e)) return;
+      if (toys && e.pointerType !== 'mouse' && toys.grab(e)) { e.preventDefault(); return; }
+      if (e.pointerType !== 'mouse') startView(e);
+      return;
+    }
+    if (toys) toys.release(best);
+    best.want = null;
+    best.anchor.copy(best.holder.position).addScaledVector(Y, H);
+    if (best.state === 'busy') best.pos.copy(best.holder.position);
+    takeUp(best, e);
+    e.preventDefault();
+  });
+  function takeUp(l, e) {
+    held = l;
     held.state = 'held';
     held.pointerId = e.pointerId;
     // (Its island stays the one it was taken from until it lands elsewhere: dropped, it comes back there.)
-    held.anchor.copy(held.pos).addScaledVector(Y, H);
     held.vel.set(0, 0, 0); held.lastVel.set(0, 0, 0);
     held.swing = 0; held.swingVel = 0;
     held.plane = held.anchor.clone();
@@ -718,8 +756,30 @@ export async function start(root, ui) {
     samples.length = 0;
     document.documentElement.style.cursor = 'grabbing';
     tell('grab');
-    e.preventDefault();
-  });
+  }
+  // A new Linker from the tray: carried out under the pointer (let go, it comes down there), or, with only a press
+  // (or a key), dropped from the sky somewhere on the island.
+  function addLinker(e) {
+    if (linkers.length >= MAX_LINKERS) return false;
+    const l = makeLinker(['circle', 'triangle', 'square'][Math.floor(Math.random() * 3)]);
+    l.island = l.home = startIsland;
+    l.pos.copy(spot(startIsland, l));
+    l.path = [];
+    l.vel.set(0, 0, 0); l.lastVel.set(0, 0, 0); l.swing = 0; l.swingVel = 0;
+    if (e) {
+      Object.assign(pointer, { x: e.clientX, y: e.clientY, at: nowMs(), here: true });
+      l.carryTop = undefined;
+      takeUp(l, e);
+      l.anchor.copy(carryPoint(l));
+    } else {
+      l.anchor.set(l.pos.x, l.pos.y + 9 + H, l.pos.z);
+      l.state = 'drop';
+    }
+    l.holder.position.copy(l.anchor);
+    if (ui.linkers) ui.linkers(linkers.length, MAX_LINKERS);
+    tell('add');
+    return true;
+  }
   // Turning, moving and zooming the view by hand.
   const drags = new Map();          // pointer id -> { x, y, pan }
   let pinch = 0, twist = null;
@@ -780,7 +840,7 @@ export async function start(root, ui) {
     const v = samples.length ? samples.reduce((a, x) => a + x.v.length(), 0) / samples.length : 0;
     tell('drop', { thrown: v > 2.6 });
     held.state = 'fall';
-    held.fallAt = performance.now();
+    held.fallAt = nowMs();
     held = null;
     document.documentElement.style.cursor = '';
   };
@@ -815,7 +875,7 @@ export async function start(root, ui) {
     if (away && cell) {
       if (l.state !== 'flee' && !l.fleeAt) l.fleeAt = now + l.react * 1000;
       if (now >= l.fleeAt) {
-        if (l.state !== 'flee') l.hopAt = now;
+        if (l.state !== 'flee') { l.hopAt = now; l.hopH = 0.12; }
         l.state = 'flee';
         if (!l.path.length || now - (l.fleeAim || 0) > 250) {
           l.fleeAim = now;
@@ -837,22 +897,46 @@ export async function start(root, ui) {
     }
     // Running tires it: a long chase slows it down; resting brings the breath back.
     l.tired = clamp((l.tired || 0) + (l.state === 'flee' ? dt / 3.5 : -dt / 2.5), 0, 1);
-    if (l.state === 'idle' && now > l.until && cell) {
+    // Something it wants (a toy, a seat, shelter from the rain): the way there cell by cell, then straight to the
+    // very spot; there, what it came for.
+    let aim = null;
+    if (l.want && l.state !== 'flee') {
+      const w = l.want;
+      const p = w.alive() && now < w.until ? w.at() : null;
+      const t = p && tileAt(p.x, p.z);
+      if (!p || !cell || !t || t.island !== l.island || t.cell.blocked) {
+        l.want = null; l.path = [];
+        if (l.state === 'walk') { l.state = 'idle'; l.until = now + 600; }
+      } else if (Math.hypot(p.x - l.pos.x, p.z - l.pos.z) < w.near) {
+        l.want = null; l.path = [];
+        l.state = 'idle'; l.until = now + 800 + Math.random() * 1200;
+        w.then(l, now);
+        if (l.state === 'busy') return;
+      } else {
+        if (!l.path.length || now - (l.wantAt || 0) > 350) {
+          l.wantAt = now;
+          l.path = t.cell === cell ? [] : way(cell, t.cell);
+        }
+        if (t.cell !== cell && !l.path.length) { l.want = null; if (l.state === 'walk') { l.state = 'idle'; l.until = now + 600; } }
+        else { l.state = 'walk'; if (l.path.length <= 1) aim = p; }
+      }
+    }
+    if (l.state === 'idle' && now > l.until && cell && !l.want) {
       const { cells } = reach(cell, 6);
       const to = cells[Math.floor(Math.random() * cells.length)];
       l.path = to === cell ? [] : way(cell, to);
       if (l.path.length) l.state = 'walk'; else l.until = now + 1200;
     }
     let speed = 0;
-    if ((l.state === 'walk' || l.state === 'flee') && l.path.length) {
-      const next = cellWorld(l.path[0], tmp2);
+    if ((l.state === 'walk' || l.state === 'flee') && (l.path.length || aim)) {
+      const next = aim ? tmp2.copy(aim) : cellWorld(l.path[0], tmp2);
       const to = tmp.set(next.x - l.pos.x, 0, next.z - l.pos.z);
       const d = to.length();
       if (d < 0.07) {
-        l.path.shift();
-        if (!l.path.length && l.state === 'walk') { l.state = 'idle'; l.until = now + 1500 + Math.random() * 2600; }
+        if (l.path.length) l.path.shift();
+        if (!l.path.length && l.state === 'walk' && !l.want) { l.state = 'idle'; l.until = now + 1500 + Math.random() * 2600; }
       } else {
-        speed = l.state === 'flee' ? 2.6 * LV.flee * (1 - 0.55 * l.tired) : 0.55;
+        speed = l.state === 'flee' ? 2.6 * LV.flee * (1 - 0.55 * l.tired) : l.want ? (l.want.run ? 1.5 : 0.8) : 0.55;
         to.divideScalar(d);
         const want = Math.atan2(to.x, to.z);
         const turn = ((want - l.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
@@ -861,12 +945,12 @@ export async function start(root, ui) {
         const step = Math.min(d, speed * dt * clamp(1 - Math.abs(turn) / 2.6, 0.45, 1));
         l.pos.x += Math.sin(l.heading) * step; l.pos.z += Math.cos(l.heading) * step;
       }
-    } else if (l.state === 'walk') {
+    } else if (l.state === 'walk' && !l.want) {
       l.state = 'idle'; l.until = now + 1000;
     }
     // Not into one another (but not pushed off where it may stand).
     for (const o of linkers) {
-      if (o === l || o.island !== l.island || !['idle', 'walk', 'flee'].includes(o.state)) continue;
+      if (o === l || o.island !== l.island || !['idle', 'walk', 'flee'].includes(o.state) || o.perch) continue;
       const dx = l.pos.x - o.pos.x, dz = l.pos.z - o.pos.z, d = Math.hypot(dx, dz);
       if (d > 0 && d < 0.42) {
         const nx = l.pos.x + dx / d * (0.42 - d) * 0.5, nz = l.pos.z + dz / d * (0.42 - d) * 0.5;
@@ -880,10 +964,11 @@ export async function start(root, ui) {
     l.walkW = damp(l.walkW, speed > 0 ? 1 : 0, 8, dt);
     l.walk.setEffectiveWeight(l.walkW);
     l.idle.setEffectiveWeight(1 - l.walkW);
-    l.walk.timeScale = l.state === 'flee' ? 2.6 * (1 - 0.45 * l.tired) : 1;
-    // A start's hop, a landing's squash.
+    l.walk.timeScale = l.state === 'flee' ? 2.6 * (1 - 0.45 * l.tired) : clamp(speed / 0.55, 1, 2.6);
+    // A start's hop (or one for joy, or up at a bubble), a landing's squash.
     const ht = (now - l.hopAt) / 1000, lt = (now - l.landAt) / 1000;
-    const lift = ht >= 0 && ht < 0.3 ? 0.12 * Math.sin(Math.PI * ht / 0.3) : 0;
+    const hopH = l.hopH || 0.12, hopT = 0.3 * Math.sqrt(hopH / 0.12);
+    const lift = ht >= 0 && ht < hopT ? hopH * Math.sin(Math.PI * ht / hopT) : 0;
     const sq = lt >= 0 && lt < 0.16 ? 1 - 0.24 * Math.sin(Math.PI * lt / 0.16) : lt >= 0.16 && lt < 0.42 ? 1 + 0.06 * Math.sin(Math.PI * (lt - 0.16) / 0.26) : 1;
     l.holder.position.copy(l.pos).addScaledVector(Y, lift);
     l.holder.quaternion.setFromAxisAngle(Y, l.heading);
@@ -962,7 +1047,7 @@ export async function start(root, ui) {
         if (free) cellWorld(free, l.pos);
       }
       l.island = t.island;
-      l.path = [];
+      l.path = []; l.want = null; l.job = null;
       l.state = 'idle'; l.until = now + 900 + Math.random() * 1200;
       l.landAt = now; l.blinkAt = now + 40; l.swing = 0; l.swingVel = 0; l.fleeAt = 0;
       if (t.island.sign && t.island.sign !== l.sign) { l.puzzledAt = now; l.until = now + 2200; }
@@ -980,6 +1065,7 @@ export async function start(root, ui) {
   }
 
   function count() {
+    if (PLAY) return;
     const standing = (l) => ['idle', 'walk', 'flee'].includes(l.state);
     let total = 0;
     for (const isl of signIslands) {
@@ -1024,7 +1110,7 @@ export async function start(root, ui) {
       turnBone(l.bones.Head, q.setFromAxisAngle(tmp.set(0, 0, 1).applyQuaternion(l.holder.quaternion), tilt));
     }
     // On the ground: a glance at the pointer when it is near, else ahead; blinking.
-    if (pointer.here && !held && (l.state === 'idle' || l.state === 'flee')) {
+    if (pointer.here && !held && (l.state === 'idle' || l.state === 'flee') && !(toys && toys.looking(l))) {
       bonesLook(l);
     }
     const bt = now - l.blinkAt;
@@ -1048,8 +1134,12 @@ export async function start(root, ui) {
   let acc = 0;
   reset();
   function tick() {
-    const dt = Math.min(clock.getDelta(), 0.25);
-    const now = performance.now();
+    step(Math.min(clock.getDelta(), 0.25));
+    renderer.render(world, camera);
+    requestAnimationFrame(tick);
+  }
+  function step(dt) {
+    const now = nowMs();
     grassUniforms.uTime.value = now / 1000;
     look.yaw = damp(look.yaw, look.tyaw, 12, dt);
     look.pitch = damp(look.pitch, look.tpitch, 12, dt);
@@ -1068,6 +1158,7 @@ export async function start(root, ui) {
       for (const l of linkers) if (l.island === isl && ['idle', 'walk', 'flee'].includes(l.state)) l.pos.add(delta);
     }
     for (const l of linkers) l.scr = toScreen(l.pos.clone().addScaledVector(Y, H * 0.5));
+    if (toys) toys.update(now, dt);
     if (ring) {
       const l = linkers[0];
       const show = !caughtOnce && ['idle', 'walk', 'flee'].includes(l.state);
@@ -1091,14 +1182,21 @@ export async function start(root, ui) {
       l.mixer.update(dt);
     }
     while (acc >= STEP) {
-      for (const l of linkers) (['idle', 'walk', 'flee'].includes(l.state) ? ground : air)(l, now, STEP);
+      for (const l of linkers) {
+        if (l.state === 'busy') toys.drive(l, now, STEP);
+        else (['idle', 'walk', 'flee'].includes(l.state) ? ground : air)(l, now, STEP);
+      }
       acc -= STEP;
     }
-    for (const l of linkers) { l.model.updateMatrixWorld(true); pose(l, now); }
+    for (const l of linkers) {
+      l.model.updateMatrixWorld(true);
+      pose(l, now);
+      if (toys && l.state !== 'held' && l.state !== 'fall' && l.state !== 'drop') toys.pose(l, now, dt);
+    }
     // Each shadow on the ground below its Linker: under its feet as it walks (staying down through a hop); held or
     // falling, on whatever island is below it, smaller and fainter the higher it is; over the gap, none.
     for (const l of linkers) {
-      const onGroundNow = ['idle', 'walk', 'flee'].includes(l.state);
+      const onGroundNow = ['idle', 'walk', 'flee', 'busy'].includes(l.state);
       const feet = onGroundNow ? l.pos : l.holder.position;
       const t = tileAt(feet.x, feet.z);
       const h = t ? feet.y - t.top : -1;
@@ -1126,9 +1224,14 @@ export async function start(root, ui) {
       s.stem.rotation.set(windDir.z * a, 0, -windDir.x * a);
       if (s.grow < 1) { s.grow = smooth((now - s.born) / 900); s.stem.scale.setScalar(Math.max(0.001, s.grow)); }
     }
-    renderer.render(world, camera);
-    requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
   ui.again(reset);
+  if (PLAY && ui.play) {
+    ui.play({
+      take(kind, e) { return kind === 'linker' ? addLinker(e) : (toys.spawn(kind, e), true); },
+      drop(kind) { return kind === 'linker' ? addLinker(null) : (toys.drop(kind), true); },
+    });
+    if (ui.linkers) ui.linkers(linkers.length, MAX_LINKERS);
+  }
 }
