@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>초원 섬 · 링커 나누기</title>
-<meta name="description" content="세모네모의 링커들을 가슴의 문양대로 초원 섬에 나눠 주는 작은 놀이. 잡고, 던지고, 제자리를 찾아 주세요.">
-<meta property="og:title" content="초원 섬 · 링커 나누기">
-<meta property="og:description" content="세모네모의 링커들을 가슴의 문양대로 초원 섬에 나눠 주는 작은 놀이.">
+<title>초원 섬 · 링커 놀이터</title>
+<meta name="description" content="세모네모의 링커들과 초원 섬에서 노는 작은 놀이터. 나비, 모자, 공, 우산, 비구름, 미끄럼틀, 그네, 시소를 꺼내 주세요.">
+<meta property="og:title" content="초원 섬 · 링커 놀이터">
+<meta property="og:description" content="세모네모의 링커들과 초원 섬에서 노는 작은 놀이터.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://seongyooo.github.io/linker-meadow/og.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -111,7 +111,7 @@
 </head>
 <body>
 <div id="stage"></div>
-<nav class="modes" aria-label="놀이 방법"><a href="./?level=1" id="modeSort">나누기</a><a href="./?play" id="modePlay">놀이터</a></nav>
+<nav class="modes" aria-label="놀이 방법"><a href="./" id="modePlay">놀이터</a><a href="./?level=1" id="modeSort">나누기</a></nav>
 <div class="head"><small id="stageNo">STAGE 1</small><b id="count">0 / 2</b><span id="hint"></span></div>
 <div class="cue" id="cue" role="status"><svg id="cuePic" viewBox="0 0 34 34" aria-hidden="true"></svg><span id="cueText"></span></div>
 <div class="done" id="done" role="status"><span id="doneText"></span><button type="button" id="next">다음 단계</button></div>
@@ -120,8 +120,6 @@
   <button type="button" data-tool="butterfly"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 16c-2-5-7-8-10-6.5S5 17 9 18c-3 2-2 6 1 6s5-4 6-8z" fill="#F6D365"/><path d="M16 16c2-5 7-8 10-6.5S27 17 23 18c3 2 2 6-1 6s-5-4-6-8z" fill="#F29E4C"/><path d="M16 11v12" stroke="#4A3B5C" stroke-width="1.6" stroke-linecap="round"/></svg>나비</button>
   <button type="button" data-tool="hat"><svg viewBox="0 0 32 32" aria-hidden="true"><ellipse cx="16" cy="21" rx="12" ry="4" fill="#E9C77B"/><path d="M9.5 20.5c0-6 3-9 6.5-9s6.5 3 6.5 9z" fill="#F0D597"/><path d="M9.8 18h12.4v2.4H9.8z" fill="#E46F5A"/></svg>모자</button>
   <button type="button" data-tool="ball"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="10" fill="#FFF6E0"/><path d="M16 16V6a10 10 0 0 1 8.66 5z" fill="#E8574A"/><path d="M16 16l8.66 5A10 10 0 0 1 16 26z" fill="#F4C542"/><path d="M16 16l-8.66 5a10 10 0 0 1 0-10z" fill="#4C8FD9"/><circle cx="16" cy="16" r="10" fill="none" stroke="#242A4A" stroke-opacity=".2"/></svg>공</button>
-  <button type="button" data-tool="bubbles"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="18" r="7" fill="#DCEFFF" fill-opacity=".6" stroke="#7FB3E8" stroke-width="1.4"/><circle cx="22.5" cy="10.5" r="4" fill="#F5DDF7" fill-opacity=".6" stroke="#C49BD8" stroke-width="1.3"/><circle cx="23" cy="22.5" r="2.6" fill="#E1F7EE" fill-opacity=".7" stroke="#7CC5A8" stroke-width="1.2"/><path d="M9.6 15a4 4 0 0 1 3-2.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>비눗방울</button>
-  <button type="button" data-tool="fruit"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 11c-3-2.2-9-1.5-9 5.5 0 5.5 4 10.5 6.5 10.5 1.3 0 1.8-.6 2.5-.6s1.2.6 2.5.6c2.5 0 6.5-5 6.5-10.5 0-7-6-7.7-9-5.5z" fill="#D9483B"/><path d="M16 11c0-2 .5-4 2-5.5" stroke="#6B4E3D" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M17.5 8c1.5-2.5 4.5-3 6-2-1 2.5-3.5 3.5-6 2z" fill="#6FA857"/></svg>열매</button>
   <button type="button" data-tool="umbrella"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 16a12 9 0 0 1 24 0q-2-1.8-4 0q-2-1.8-4 0q-2-1.8-4 0q-2-1.8-4 0q-2-1.8-4 0q-2-1.8-4 0z" fill="#F7A6C0"/><path d="M16 16v9a2.2 2.2 0 0 1-4.4 0" stroke="#6B4E3D" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M16 7V5" stroke="#6B4E3D" stroke-width="1.6" stroke-linecap="round"/></svg>우산</button>
   <button type="button" data-tool="rain"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9 18.5a4.5 4.5 0 0 1 .8-8.9 6 6 0 0 1 11.5-.6A4.8 4.8 0 1 1 22.5 18.5z" fill="#fff" stroke="#9FB5D6" stroke-width="1.3"/><path d="M11.5 22l-1 3M16.5 22l-1 3M21.5 22l-1 3" stroke="#6FA8DC" stroke-width="1.6" stroke-linecap="round"/></svg>비구름</button>
   <button type="button" data-tool="slide"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27V9M10 27V9M5 13.5h5M5 18.5h5M5 23.5h5" stroke="#6FA8DC" stroke-width="1.8" stroke-linecap="round"/><path d="M10 9c5 0 6 4 9 10s5 7 9 7" stroke="#F2B33D" stroke-width="3.2" stroke-linecap="round" fill="none"/></svg>미끄럼틀</button>
@@ -171,7 +169,7 @@
   })();
 </script>
 <script type="module">
-  import { start } from './js/meadow3d.js?v=8';
+  import { start } from './js/meadow3d.js?v=9';
   const $ = (id) => document.getElementById(id);
   // (#og: the picture for a link's preview, without the words.)
   if (location.hash === '#og') document.body.classList.add('og');
@@ -202,7 +200,7 @@
   CUES.tray = { pic: touch ? finger('drag') : mouse('left', 'drag'), text: '아래 도구를 끌어다 초원에 놓아 보세요', until: 'toy' };
   CUES.friends = { pic: touch ? finger('drag') : mouse('left', 'drag'), text: '「링커」를 끌어오면 친구가 늘어나요', until: 'add' };
   const PLAN = { 0: ['tray', 'friends'], 1: ['grab', 'carry', 'throw'], 2: ['turn', 'zoom'] };
-  const PLAYING = new URLSearchParams(location.search).has('play');
+  const PLAYING = !new URLSearchParams(location.search).has('level');
   if (PLAYING) document.body.classList.add('play');
   $(PLAYING ? 'modePlay' : 'modeSort').setAttribute('aria-current', 'page');
   let plan = [], current = null, shownAt = 0;
@@ -221,11 +219,11 @@
       if (n === 0) {
         $('stageNo').textContent = '';
         $('count').textContent = '놀이터';
-        document.title = '초원 섬 · 링커 놀이터';
         plan = [...PLAN[0]];
         setTimeout(nextCue, 1200);
         return;
       }
+      document.title = '초원 섬 · 링커 나누기';
       $('stageNo').textContent = `STAGE ${n}`;
       $('hint').textContent = hint;
       $('next').textContent = n < all ? '다음 단계' : '처음부터';

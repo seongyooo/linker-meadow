@@ -1,7 +1,6 @@
 // The playground (?play): toys dragged out of the tray onto the meadow, and what the Linkers do with them. Nothing
-// here hurts anyone: a butterfly to chase, hats to put on, a ball to kick about, bubbles to pop, fruit to share, an
-// umbrella to carry, a little rain that brings flowers up, a slide, a swing and a seesaw. Every toy goes in time, or
-// sooner (eaten, popped, blown away, rolled off into the clouds).
+// here hurts anyone: a butterfly to chase, hats to put on, a ball to kick about, an umbrella to carry, a little rain that brings flowers up, a slide, a swing and a seesaw. Every toy goes in time, or
+// sooner (blown away, rolled off into the clouds).
 import * as THREE from 'three';
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -15,10 +14,10 @@ const turnTo = (h, want, max) => h + clamp(((want - h + Math.PI * 3) % (Math.PI 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const rgb = (h) => [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255];
 
-export const TOOLS = ['linker', 'butterfly', 'hat', 'ball', 'bubbles', 'fruit', 'umbrella', 'rain', 'slide', 'swing', 'seesaw'];
+export const TOOLS = ['linker', 'butterfly', 'hat', 'ball', 'umbrella', 'rain', 'slide', 'swing', 'seesaw'];
 
 // Where a toy hangs under the pointer while carried (how high over the ground under it), and how big.
-const LIFT = { butterfly: 1.0, hat: 0.7, ball: 0.7, bubbles: 0.9, fruit: 0.7, umbrella: 0.5, rain: 2.3, slide: 1.2, swing: 1.0, seesaw: 0.9 };
+const LIFT = { butterfly: 1.0, hat: 0.7, ball: 0.7, umbrella: 0.5, rain: 2.3, slide: 1.2, swing: 1.0, seesaw: 0.9 };
 const HELD_SIZE = { slide: 0.7, swing: 0.7, seesaw: 0.7, rain: 0.75 };
 
 export function makeToys(ctx) {
@@ -112,8 +111,8 @@ export function makeToys(ctx) {
     l.path = [];
   }
   const wanting = (toy) => linkers.filter((l) => l.want && l.want.toy === toy).length;
-  const act = (l) => l.act || (l.act = { sit: 0, sitT: 0, gazeW: 0, gp: V(), climb: 0, climbW: 0, munch: 0, munchW: 0, kick: 0, sway: 0 });
-  function clearAct(l) { const a = act(l); a.sitT = 0; a.climb = 0; a.munch = 0; a.kick = 0; a.sway = 0; l.gazeJob = null; }
+  const act = (l) => l.act || (l.act = { sit: 0, sitT: 0, gazeW: 0, gp: V(), climb: 0, climbW: 0, kick: 0, sway: 0 });
+  function clearAct(l) { const a = act(l); a.sitT = 0; a.climb = 0; a.kick = 0; a.sway = 0; l.gazeJob = null; }
   function busy(l, job) { l.state = 'busy'; l.job = { t0: now, ...job }; l.want = null; l.path = []; }
   function done(l, hop = 0) {
     l.job = null; l.state = 'idle'; l.until = now + rand(700, 1600); l.path = [];
@@ -408,133 +407,6 @@ export function makeToys(ctx) {
           ctx.tell('kick');
         },
       });
-    }
-  }
-
-  // ================================================================ Bubbles.
-  const bubbleLook = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false,
-    uniforms: { uView: ctx.shared.view, uAlpha: { value: 1 } },
-    vertexShader: `varying vec3 vN; void main() { vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `uniform vec3 uView; uniform float uAlpha; varying vec3 vN;
-      void main() {
-        vec3 n = normalize(vN);
-        float f = 1.0 - abs(dot(n, normalize(uView)));
-        vec3 hue = 0.62 + 0.38 * cos(6.2831 * (f * 1.4 + vec3(0.0, 0.33, 0.67)));
-        float spec = pow(max(dot(n, normalize(vec3(-0.45, 0.8, 0.4))), 0.0), 36.0);
-        gl_FragColor = vec4(mix(vec3(1.0), hue, 0.6) + spec, (0.07 + 0.6 * pow(f, 2.4) + spec * 0.8) * uAlpha);
-      }`,
-  });
-  const bubbleShape = new THREE.SphereGeometry(1, 24, 16);
-  function bubbleMesh(r) {
-    const m = bubbleLook.clone();
-    m.uniforms.uView = ctx.shared.view;
-    const b = new THREE.Mesh(bubbleShape, m);
-    b.scale.setScalar(r);
-    b.renderOrder = 4;
-    return b;
-  }
-  function makeBubbles() {
-    const obj = new THREE.Group();
-    [[0, 0, 0, 0.09], [0.12, 0.08, 0.03, 0.06], [-0.1, 0.1, -0.02, 0.05]].forEach(([x, y, z, r]) => obj.add(at(bubbleMesh(r), x, y, z)));
-    return add('bubbles', obj, { lookable: true });
-  }
-  function blowBubbles(t) {
-    const from = t.obj.position.clone();
-    remove(t);
-    for (let k = 0; k < 8; k++) {
-      const r = rand(0.07, 0.14);
-      const obj = new THREE.Group();
-      obj.add(bubbleMesh(1));
-      obj.position.copy(from).add(t1.set(rand(-0.35, 0.35), rand(-0.15, 0.25), rand(-0.35, 0.35)));
-      obj.scale.setScalar(0.01);
-      add('bubble', obj, { r, size: r, state: 'float', life: rand(9000, 15000), phase: rand(0, 6), rise: rand(0.12, 0.28), lookable: true, grow: now + k * 90 });
-    }
-  }
-  function pop(t) { if (t.state !== 'pop') { t.state = 'pop'; t.popAt = now; } }
-  function bubbleFrame(t, dt) {
-    const p = t.obj.position, m = t.obj.children[0].material;
-    if (t.state === 'pop') {
-      const k = (now - t.popAt) / 140;
-      t.obj.scale.setScalar(t.r * (1 + 0.6 * k));
-      m.uniforms.uAlpha.value = 1 - k;
-      if (k >= 1) remove(t);
-      return;
-    }
-    t.obj.scale.setScalar(t.r * smooth((now - t.grow) / 300));
-    p.x += (ctx.windDir.x * 0.12 + Math.sin(now / 900 + t.phase) * 0.08) * dt;
-    p.z += (ctx.windDir.z * 0.12 + Math.cos(now / 1100 + t.phase) * 0.08) * dt;
-    p.y += (t.rise + Math.sin(now / 500 + t.phase) * 0.06) * dt;
-    if (now - t.born > t.life || p.y - groundAt(p) > 3.6) pop(t);
-    // Touching a Linker's head (one on the ground hopping for it, or one swung into it by hand): pop.
-    for (const l of linkers) {
-      l.bones.Head.getWorldPosition(t2).y += 0.12;
-      if (t2.distanceTo(p) < t.r + 0.17) { pop(t); if (onFoot(l)) l.blinkAt = now; break; }
-    }
-  }
-  function reachBubble(t) {
-    if (t.state !== 'float' || wanting(t)) return;
-    const p = t.obj.position;
-    const l = nearestFree(p, 1.8, (l) => { const h = p.y - l.pos.y; return h > 0.45 && h < 1.25; })[0];
-    if (!l || Math.random() > 0.6) return;
-    want(l, t, () => p, { near: 0.22, run: true, ms: 2500, alive: () => t.state === 'float', then: (l) => { hop(l, 0.36); l.cool = now + 700; } });
-  }
-
-  // ================================================================ Fruit.
-  const FRUIT = new THREE.SphereGeometry(0.11, 20, 14);
-  const STEM = new THREE.CylinderGeometry(0.008, 0.011, 0.06, 6);
-  const LEAF = new THREE.SphereGeometry(0.04, 10, 6);
-  function makeFruit() {
-    const obj = new THREE.Group(), inner = new THREE.Group();
-    const f = part(FRUIT, pick([0xD9483B, 0xF0C04A, 0x9CC95A, 0xF4A47E]));
-    f.scale.set(1, 0.92, 1);
-    inner.add(at(f, 0, 0.1, 0));
-    inner.add(at(part(STEM, 0x6B4E3D), 0, 0.21, 0));
-    const leaf = at(part(LEAF, 0x6FA857), 0.035, 0.215, 0);
-    leaf.scale.set(1, 0.25, 0.55); leaf.rotation.z = 0.5;
-    inner.add(leaf);
-    obj.add(inner);
-    return add('fruit', obj, { inner, left: 1, eaters: new Set(), seats: [], shadow: true, shadowK: 0.7, base: rand(0, Math.PI * 2) });
-  }
-  function seatFruit(t) {
-    if (t.state !== 'ground') return;
-    const p = t.obj.position;
-    for (let s = 0; s < 3; s++) {
-      if (t.seats[s]) continue;
-      const a = t.base + s * Math.PI * 2 / 3;
-      const seat = V(p.x + Math.sin(a) * 0.36, 0, p.z + Math.cos(a) * 0.36);
-      const g = tileAt(seat.x, seat.z), f = tileAt(p.x, p.z);
-      if (!g || !f || g.cell.blocked || g.island !== f.island || Math.abs(g.top - f.top) > 0.01) continue;
-      seat.y = g.top;
-      const l = nearestFree(p, 7)[0];
-      if (!l || Math.random() > 0.6) return;
-      t.seats[s] = l;
-      want(l, t, () => seat, {
-        near: 0.1, ms: 9000, alive: () => t.state === 'ground',
-        then: (l) => {
-          if (t.state !== 'ground') return;
-          t.eaters.add(l);
-          busy(l, { toy: t, seat: s, drive: driveEat, cancel: () => { t.eaters.delete(l); t.seats[s] = null; } });
-        },
-      });
-    }
-  }
-  function driveEat(l, dt) {
-    const t = l.job.toy, a = act(l);
-    a.sitT = 1; a.munch = 1;
-    l.gazeJob = t.obj.position;
-    body(l, l.pos, turnTo(l.heading, yawTo(l.pos, t.obj.position), dt * 8), dt, 0, HIP * a.sit);
-  }
-  function fruitFrame(t, dt) {
-    for (const [s, l] of t.seats.entries()) if (l && !(l.want && l.want.toy === t) && !(l.job && l.job.toy === t)) t.seats[s] = null;
-    if (t.state === 'ground' && t.eaters.size) {
-      t.left -= dt * 0.075 * t.eaters.size;
-      t.inner.scale.setScalar(0.2 + 0.8 * Math.cbrt(Math.max(0, t.left)));
-      if (t.left <= 0) {
-        for (const l of t.eaters) done(l, 0.2);
-        t.eaters.clear();
-        remove(t);
-      }
     }
   }
 
@@ -987,7 +859,7 @@ export function makeToys(ctx) {
   }
 
   // ================================================================ Making, carrying, letting go.
-  const MAKE = { butterfly: makeButterfly, hat: makeHat, ball: makeBall, bubbles: makeBubbles, fruit: makeFruit, umbrella: makeUmbrella, rain: makeRain, slide: makeSlide, swing: makeSwing, seesaw: makeSeesaw };
+  const MAKE = { butterfly: makeButterfly, hat: makeHat, ball: makeBall, umbrella: makeUmbrella, rain: makeRain, slide: makeSlide, swing: makeSwing, seesaw: makeSeesaw };
   function spawn(kind, e) {
     now = ctx.now();
     if (held) letGo({ pointerId: held.id, clientX: ctx.pointer.x, clientY: ctx.pointer.y, dropHere: true });
@@ -1004,7 +876,7 @@ export function makeToys(ctx) {
     const t = MAKE[kind]();
     t.size = 1;
     t.obj.scale.setScalar(HELD_SIZE[kind] || 1);
-    t.obj.position.copy(randomPoint(LIFT[kind] + (['hat', 'ball', 'fruit', 'umbrella'].includes(kind) ? 1.5 : 0)));
+    t.obj.position.copy(randomPoint(LIFT[kind] + (['hat', 'ball', 'umbrella'].includes(kind) ? 1.5 : 0)));
     freeToy(t, false);
   }
   function freeToy(t, thrown) {
@@ -1012,7 +884,6 @@ export function makeToys(ctx) {
     ctx.tell('toy', { kind: t.kind });
     switch (t.kind) {
       case 'butterfly': t.state = 'fly'; aimButterfly(t); break;
-      case 'bubbles': blowBubbles(t); break;
       case 'rain': t.state = 'rain'; t.until = now + 15000; t.obj.scale.setScalar(1); break;
       case 'slide': case 'swing': case 'seesaw': place(t, p.clone()); break;
       case 'ball': t.state = 'loose'; break;
@@ -1028,7 +899,7 @@ export function makeToys(ctx) {
     // Let go over the tray itself (only a press, no drag), it goes somewhere on the island.
     const under = e.dropHere ? null : document.elementFromPoint(e.clientX, e.clientY);
     if (under && under.closest && under.closest('.tray')) {
-      t.obj.position.copy(randomPoint(LIFT[t.kind] + (['hat', 'ball', 'fruit', 'umbrella'].includes(t.kind) ? 1.5 : 0)));
+      t.obj.position.copy(randomPoint(LIFT[t.kind] + (['hat', 'ball', 'umbrella'].includes(t.kind) ? 1.5 : 0)));
       freeToy(t, false);
       return;
     }
@@ -1039,25 +910,22 @@ export function makeToys(ctx) {
   }
   addEventListener('pointerup', letGo);
   addEventListener('pointercancel', letGo);
-  // Catching a toy already out (the ball, a hat or fruit or an umbrella lying about); bubbles pop at a touch, a
-  // butterfly flits off.
+  // Catching a toy already out (the ball, a hat or an umbrella lying about); a butterfly flits off.
   function grab(e) {
     now = ctx.now();
     const px = ctx.pxPerUnit();
     let best = null, bd = Infinity;
     for (const t of toys) {
       if (t.gone || t.leaving) continue;
-      const okKind = (t.kind === 'bubble' && t.state === 'float') || (t.kind === 'butterfly' && t.state === 'fly')
-        || (['ball'].includes(t.kind) && t.state === 'loose') || (['hat', 'fruit', 'umbrella'].includes(t.kind) && ['ground', 'stand', 'air'].includes(t.state));
+      const okKind = (t.kind === 'butterfly' && t.state === 'fly')
+        || (t.kind === 'ball' && t.state === 'loose') || (['hat', 'umbrella'].includes(t.kind) && ['ground', 'stand', 'air'].includes(t.state));
       if (!okKind) continue;
       const s = ctx.toScreen(t.obj.getWorldPosition(t1).add(t2.set(0, t.kind === 'umbrella' ? 0.4 : 0.08, 0)));
       const d = Math.hypot(s.x - e.clientX, s.y - e.clientY), reach = Math.max(22, (t.kind === 'umbrella' ? 0.45 : 0.25) * px);
       if (d < reach && d < bd) { best = t; bd = d; }
     }
     if (!best) return false;
-    if (best.kind === 'bubble') { pop(best); return true; }
     if (best.kind === 'butterfly') { aimButterfly(best, 2); return true; }
-    if (best.kind === 'fruit') { for (const l of best.eaters) done(l); best.eaters.clear(); best.seats = []; }
     for (const l of linkers) if (l.want && l.want.toy === best) { l.want = null; l.path = []; }
     best.state = 'held';
     best.obj.quaternion.identity();
@@ -1086,8 +954,6 @@ export function makeToys(ctx) {
           const l = nearestFree(t.obj.position, 7, (l) => !l.hat)[0];
           if (l) want(l, t, () => t.obj.position, { near: 0.3, alive: () => t.state === 'ground', then: (l) => startDon(l, t) });
         } else if (t.kind === 'ball') kickBall(t);
-        else if (t.kind === 'bubble') reachBubble(t);
-        else if (t.kind === 'fruit') seatFruit(t);
         else if (t.kind === 'umbrella') takeUmbrella(t);
         else if (t.kind === 'rain') rainThink(t);
         else if (RIDES[t.kind]) rideThink(t);
@@ -1099,7 +965,7 @@ export function makeToys(ctx) {
       t.obj.position.lerp(overPointer(LIFT[t.kind]), 1 - Math.exp(-22 * dt));
       held.samples.push(V().subVectors(t.obj.position, before).divideScalar(Math.max(dt, 1e-3)));
       while (held.samples.length > 8) held.samples.shift();
-      if (t.kind === 'hat' || t.kind === 'fruit') t.obj.rotation.y += dt * 1.5;
+      if (t.kind === 'hat') t.obj.rotation.y += dt * 1.5;
     }
     const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / n;
     for (const t of [...toys]) {
@@ -1112,7 +978,6 @@ export function makeToys(ctx) {
       }
       switch (t.kind) {
         case 'butterfly': if (t.state !== 'held') butterflyFrame(t, dt); else t.hinges.forEach((g, i) => { g.rotation.z = (i ? -1 : 1) * (0.2 + 1.2 * (0.5 + 0.5 * Math.sin(now / 42))); }); break;
-        case 'bubble': bubbleFrame(t, dt); break;
         case 'rain': if (t.state !== 'held') rainFrame(t, dt); break;
         case 'ball':
           if (t.state === 'loose') {
@@ -1121,7 +986,7 @@ export function makeToys(ctx) {
           }
           if (!t.gone) shadeUnder(t, 0.36);
           break;
-        case 'hat': case 'fruit': case 'umbrella': {
+        case 'hat': case 'umbrella': {
           const p = t.obj.position;
           if (t.state === 'air' || t.state === 'off') {
             for (let k = 0; k < n; k++) {
@@ -1136,7 +1001,7 @@ export function makeToys(ctx) {
                 if (g.cell.blocked) p.copy(freeNear(p));
                 if (t.state === 'off') { t.state = 'dropped'; fadeOut(t, 900); }
                 else if (t.kind === 'umbrella') { t.state = 'stand'; t.obj.quaternion.setFromEuler(new THREE.Euler(rand(-0.08, 0.08), rand(0, 6), rand(-0.08, 0.08))); p.y -= 0.06; t.until = now + 35000; }
-                else { t.state = 'ground'; t.obj.rotation.set(0, t.obj.rotation.y, 0); t.until = now + (t.kind === 'hat' ? 30000 : 45000); }
+                else { t.state = 'ground'; t.obj.rotation.set(0, t.obj.rotation.y, 0); t.until = now + 30000; }
                 break;
               }
               if (p.y < ctx.lowest - 8) { remove(t); break; }
@@ -1151,7 +1016,6 @@ export function makeToys(ctx) {
             t.obj.rotation.y += dt * 2.5; t.obj.rotation.z = 0.4 * Math.sin(now / 400);
             if (now - t.gustAt > 3000) fadeOut(t, 900);
           }
-          if (t.kind === 'fruit') fruitFrame(t, dt);
           if (!t.gone && t.state !== 'worn' && t.state !== 'carried' && t.state !== 'gust') shadeUnder(t, t.kind === 'umbrella' ? 0.9 : 0.34);
           break;
         }
@@ -1178,8 +1042,7 @@ export function makeToys(ctx) {
     now = nowMs;
     if (l.job) l.job.drive(l, dt); else done(l);
   }
-  // The body for what it does: sitting (legs forward), climbing (legs in turn), kicking on a swing, eating (the head
-  // nodding), looking at something (the head turned to it, as far as a head turns), a butterfly on its head (a slow
+  // The body for what it does: sitting (legs forward), climbing (legs in turn), kicking on a swing, looking at something (the head turned to it, as far as a head turns), a butterfly on its head (a slow
   // happy sway).
   function pose(l, nowMs, dt) {
     now = nowMs;
@@ -1188,7 +1051,6 @@ export function makeToys(ctx) {
     a.gazeW = damp(a.gazeW, l.gaze ? 1 : 0, 6, dt);
     a.sit = damp(a.sit, a.sitT, 10, dt);
     a.climbW = damp(a.climbW, a.climb, 10, dt);
-    a.munchW = damp(a.munchW, a.munch, 8, dt);
     const right = t1.set(1, 0, 0).applyQuaternion(l.holder.quaternion).normalize();
     if (a.sit > 0.01 || a.climbW > 0.01 || a.kick) {
       const legs = a.sit * 1.3 + a.kick;
@@ -1205,7 +1067,6 @@ export function makeToys(ctx) {
       q2.identity().slerp(q1, a.gazeW * Math.min(1, 1.0 / Math.max(ang, 1e-3)) * 0.85);
       ctx.turnBone(l.bones.Head, q2);
     }
-    if (a.munchW > 0.01) ctx.turnBone(l.bones.Head, q1.setFromAxisAngle(right, a.munchW * (0.1 + 0.09 * Math.sin(now / 85))));
     if (a.sway) {
       const fwd = V(0, 0, 1).applyQuaternion(l.holder.quaternion);
       ctx.turnBone(l.bones.Head, q1.setFromAxisAngle(fwd, 0.16 * Math.sin(now / 500)));

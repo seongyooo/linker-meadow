@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { material, geometry } from './linker3d.js?v=5';
-import { makeToys } from './toys.js?v=1';
+import { makeToys } from './toys.js?v=2';
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 let skew = 0;
@@ -205,9 +205,9 @@ const LEVELS = [
   ] },
 ];
 const LEVEL = Math.min(LEVELS.length, Math.max(1, Math.floor(+new URLSearchParams(location.search).get('level') || 1)));
-// The playground (?play): one wide meadow with a hill at one corner, a single Linker to begin with (more come from
+// The playground (the page's main play; the stages are ?level=N): one wide meadow with a hill at one corner, a single Linker to begin with (more come from
 // the tray), no signs to sort, nobody running from the pointer; the toys are in js/toys.js.
-const PLAY = new URLSearchParams(location.search).has('play');
+const PLAY = !new URLSearchParams(location.search).has('level');
 const PLAYGROUND = {
   signs: { [['circle', 'triangle', 'square'][Math.floor(Math.random() * 3)]]: 1 }, flee: 0, hint: '', islands: [
     { start: true, at: [-5, 0, -4], map: ['..000000..', '.00000000.', '0000000000', '0000000000', '0000000000', '0000000011', '.000000122', '..0000122.', '...00022..'],
@@ -965,7 +965,7 @@ export async function start(root, ui) {
     l.walk.setEffectiveWeight(l.walkW);
     l.idle.setEffectiveWeight(1 - l.walkW);
     l.walk.timeScale = l.state === 'flee' ? 2.6 * (1 - 0.45 * l.tired) : clamp(speed / 0.55, 1, 2.6);
-    // A start's hop (or one for joy, or up at a bubble), a landing's squash.
+    // A start's hop (or one for joy, or up at a butterfly), a landing's squash.
     const ht = (now - l.hopAt) / 1000, lt = (now - l.landAt) / 1000;
     const hopH = l.hopH || 0.12, hopT = 0.3 * Math.sqrt(hopH / 0.12);
     const lift = ht >= 0 && ht < hopT ? hopH * Math.sin(Math.PI * ht / hopT) : 0;
