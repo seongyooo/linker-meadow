@@ -495,6 +495,24 @@ export async function start(root, ui) {
     Object.assign(isl, { core, body, glow, mid, label, spin: Math.random() * 6 });
   }
 
+  // ---- The clouds: a sea of them under the islands (not a band across the screen), the colour of the sky's foot,
+  // thinning out far off into the sky; the islands' roots and a dropped Linker go down into it.
+  const lowest = Math.min(...islands.map((i) => i.top));
+  const clouds = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { uCentre: { value: new THREE.Vector2() } },
+    vertexShader: `varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `uniform vec2 uCentre; varying vec3 vW;
+      void main() {
+        float far = smoothstep(7.0, 22.0, length(vW.xz - uCentre));
+        gl_FragColor = vec4(0.906, 0.902, 0.871, 0.96 * (1.0 - far));
+      }`,
+  }));
+  clouds.rotation.x = -Math.PI / 2;
+  clouds.position.y = lowest - 1.9;
+  clouds.renderOrder = 1;
+  world.add(clouds);
+
   // ---- The view.
   // Framed on this stage's islands: their middle, wide enough for all of them across the screen.
   let spanLo = Infinity, spanHi = -Infinity;
@@ -904,6 +922,7 @@ export async function start(root, ui) {
     look.pitch = damp(look.pitch, look.tpitch, 12, dt);
     look.zoom = damp(look.zoom, look.tzoom, 10, dt);
     centre.lerp(tcentre, 1 - Math.exp(-12 * dt));
+    clouds.material.uniforms.uCentre.value.set(centre.x, centre.z);
     place();
     windDir.lerp(tmp.set(fwd.x, 0, fwd.z).normalize(), 1 - Math.exp(-3 * dt)).normalize();
     for (const l of linkers) l.scr = toScreen(l.pos.clone().addScaledVector(Y, H * 0.5));
