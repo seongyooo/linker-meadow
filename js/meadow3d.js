@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { material, geometry } from './linker3d.js';
+import { material, geometry } from './linker3d.js?v=5';
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const damp = (a, b, rate, dt) => b + (a - b) * Math.exp(-rate * dt);
@@ -499,18 +499,20 @@ export async function start(root, ui) {
   // thinning out far off into the sky; the islands' roots and a dropped Linker go down into it.
   const lowest = Math.min(...islands.map((i) => i.top));
   // (Two layers of soft heaped cloud, lit warm from above and blue-grey in their hollows, drifting slowly.)
-  const CLOUD_FRAG = `uniform vec2 uCentre; uniform float uTime; uniform float uSeed; varying vec3 vW;
-    float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeed) * 43758.5453); }
+  // (A hash without sin, which some phones' GPUs compute too coarsely to make any cloud at all.)
+  const CLOUD_FRAG = `precision highp float;
+    uniform vec2 uCentre; uniform float uTime; uniform float uSeed; varying vec3 vW;
+    float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx + uSeed) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
     float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
       return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
     float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 5; k++) { s += a * n(p); p *= 2.03; a *= 0.5; } return s; }
     void main() {
       vec2 q = vW.xz * 0.16 + vec2(uTime * 0.012, uTime * 0.006);
       float c = fbm(q + fbm(q * 0.6) * 0.8);
-      float puff = smoothstep(0.38, 0.72, c);
-      vec3 col = mix(vec3(0.66, 0.71, 0.78), vec3(1.0, 0.97, 0.91), smoothstep(0.45, 0.85, c));
-      float far = smoothstep(9.0, 26.0, length(vW.xz - uCentre));
-      gl_FragColor = vec4(col, (0.35 + 0.6 * puff) * (1.0 - far));
+      float puff = smoothstep(0.34, 0.66, c);
+      vec3 col = mix(vec3(0.62, 0.68, 0.77), vec3(1.0, 0.98, 0.93), smoothstep(0.42, 0.8, c));
+      float far = smoothstep(10.0, 30.0, length(vW.xz - uCentre));
+      gl_FragColor = vec4(col, (0.45 + 0.55 * puff) * (1.0 - far));
     }`;
   const cloudLayers = [[1.9, 0.0], [3.0, 7.3]].map(([down, seed], k) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.ShaderMaterial({
