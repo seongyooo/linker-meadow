@@ -64,8 +64,8 @@ varying float vShade;
 varying vec3 vRoot;
 float hash2(vec2 p) { p = fract(p * vec2(0.3183099, 0.3678794) + 0.1); p *= 17.0; return fract(p.x * p.y * (p.x + p.y)); }
 void main() {
-  vec3 root = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-  vec3 ws = (instanceMatrix * vec4(position, 1.0)).xyz;
+  vec3 root = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  vec3 ws = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
   float rise = max(0.0, ws.y - root.y);
   vec2 wind = uWind.xz;
   float phase = dot(root.xz, vec2(1.7, 1.3));
@@ -161,12 +161,45 @@ function groupedGeometry(mesh) {
   return g;
 }
 
-// The stages: small and calm at first (a tutorial), then more signs, more Linkers, bigger islands, quicker to run.
+// The stages, each with one new thing, its islands laid as the game's maps (rows along z, a digit a cell's height
+// in half blocks, '.' none; at = where its first cell sits, [x, y, z]; props on cells, the cells under them not
+// walked). 1: a tutorial; 2: two signs, the view turned; 3: an island hidden behind a ruin; 4: an island that moves;
+// 5: all of it.
 const LEVELS = [
-  { signs: { circle: 2 }, start: 3, size: 3, flee: 0, hint: '링커를 잡아 ○ 섬으로 옮겨 보세요' },
-  { signs: { circle: 2, triangle: 2 }, start: 4, size: 3, flee: 0.6, hint: '가슴의 문양과 같은 섬으로 옮겨 주세요' },
-  { signs: { circle: 3, triangle: 3, square: 3 }, start: 4, size: 3, flee: 0.85, hint: '문양이 셋이에요. 맞는 섬에 나눠 주세요' },
-  { signs: { circle: 5, triangle: 5, square: 5 }, start: 5, size: 4, flee: 1, hint: '링커가 많아졌어요. 모두 제자리를 찾아 주세요' },
+  { signs: { circle: 2 }, flee: 0, hint: '링커를 잡아 ○ 섬으로 옮겨 보세요', islands: [
+    { start: true, at: [-4, 0, -1], map: ['000', '001', '00.'] },
+    { sign: 'circle', at: [1, 0.5, 2], map: ['00', '00', '.0'], props: [{ piece: 'SignCircle', cell: [1, 0], yaw: 45, scale: 1.2 }] },
+  ] },
+  { signs: { circle: 2, triangle: 2 }, flee: 0.6, hint: '가슴의 문양과 같은 섬으로 옮겨 주세요', islands: [
+    { start: true, at: [-2, 0, -2], map: ['1100', '1100', '0000', '.00.'] },
+    { sign: 'circle', at: [-8, 0.5, -6], map: ['000', '0..', '0..'], props: [{ piece: 'SignCircle', cell: [0, 2], yaw: 45, scale: 1.2 }] },
+    { sign: 'triangle', at: [3, 0, 3], map: ['012', '001', '000'], props: [{ piece: 'SignTriangle', cell: [2, 0], yaw: 45, scale: 1.2 }] },
+  ] },
+  { signs: { circle: 3, triangle: 3, square: 3 }, flee: 0.8, hint: '어딘가 숨은 섬이 있어요. 시점을 돌려 찾아보세요', islands: [
+    { start: true, at: [-2, 0, -2], map: ['0000', '0000', '0000', '0000'] },
+    // The ruin: a temple on a rock behind the start, the triangle's island out of sight behind it.
+    { at: [3, 0, -4], map: ['22', '22'], props: [{ piece: 'RuneTemple', cell: [0, 0], dx: 0.5, dz: 0.5, yaw: -45, block: [[0, 0], [1, 0], [0, 1], [1, 1]] }] },
+    { sign: 'triangle', at: [6, -0.5, -9], map: ['000', '000', '00.'], props: [{ piece: 'SignTriangle', cell: [0, 0], yaw: 45, scale: 1.2 }] },
+    { sign: 'circle', at: [-9, 0.5, -6], map: ['000', '000', '.00'], props: [{ piece: 'SignCircle', cell: [2, 2], yaw: 45, scale: 1.2 }] },
+    { sign: 'square', at: [4, 0.5, 4], map: ['000', '00.', '000'], props: [{ piece: 'SignSquare', cell: [0, 2], yaw: 45, scale: 1.2 }] },
+  ] },
+  { signs: { circle: 3, triangle: 3, square: 3 }, flee: 0.9, hint: '움직이는 섬은 가까이 올 때를 노려 보세요', islands: [
+    { start: true, at: [-2, 0, -2], map: ['00000', '00000', '00000', '00000', '00000'],
+      props: [{ piece: 'RuneObelisk', cell: [2, 2], scale: 0.6 }] },
+    { sign: 'circle', at: [-9, 0.5, -7], map: ['000', '000'], props: [{ piece: 'SignCircle', cell: [0, 0], yaw: 45, scale: 1.2 }] },
+    { sign: 'triangle', at: [5, 1, -8], map: ['00', '00', '00'], props: [{ piece: 'SignTriangle', cell: [1, 0], yaw: 45, scale: 1.2 }] },
+    { sign: 'square', at: [6, 0.5, 5], map: ['00', '00'], move: { dir: [1, 0, 1], amp: 2, period: 9 },
+      props: [{ piece: 'SignSquare', cell: [0, 0], yaw: 45, scale: 1.2 }] },
+  ] },
+  { signs: { circle: 5, triangle: 5, square: 5 }, flee: 1, hint: '지금까지의 섬이 모두 모였어요. 모두 제자리를 찾아 주세요', islands: [
+    { start: true, at: [-3, 0, -3], map: ['22100', '22100', '11000', '00000', '00000'],
+      props: [{ piece: 'BrokenRing', cell: [3, 3], dx: 0.5, dz: 0.5, yaw: -45, scale: 0.6, block: [[3, 3], [4, 4]] }] },
+    { at: [3, 0, -6], map: ['22', '22'], props: [{ piece: 'RuneTemple', cell: [0, 0], dx: 0.5, dz: 0.5, yaw: -45, block: [[0, 0], [1, 0], [0, 1], [1, 1]] }] },
+    { sign: 'triangle', at: [6, -0.5, -11], map: ['0000', '0011', '0011'], props: [{ piece: 'SignTriangle', cell: [0, 0], yaw: 45, scale: 1.2 }] },
+    { sign: 'circle', at: [-11, 0.5, -8], map: ['0000', '0...', '0000'], props: [{ piece: 'SignCircle', cell: [3, 0], yaw: 45, scale: 1.2 }] },
+    { sign: 'square', at: [6, 0.5, 6], map: ['000', '000'], move: { dir: [1, 0, 1], amp: 2.2, period: 10 },
+      props: [{ piece: 'SignSquare', cell: [0, 0], yaw: 45, scale: 1.2 }] },
+  ] },
 ];
 const LEVEL = Math.min(LEVELS.length, Math.max(1, Math.floor(+new URLSearchParams(location.search).get('level') || 1)));
 const LV = LEVELS[LEVEL - 1];
@@ -211,85 +244,84 @@ export async function start(root, ui) {
   const Y = new THREE.Vector3(0, 1, 0);
   const windDir = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();     // from behind the view (it comes round after it)
 
-  // ---- The islands: blocks a unit wide, their tops at `top`. A: 4 x 4 where the Linkers start; B: 3 x 3 across.
-  // The start, in front; the sign islands about it, a tile's gap away: to the right, to the left, behind and higher
-  // (one island: to the right; two: left and right; three: circle left, square right, triangle behind).
-  const n0 = LV.start, s0 = -Math.floor(n0 / 2), s1 = s0 + n0 - 1, m = LV.size;
-  const places = { right: [s1 + 2, s1 + 2, 0.5], left: [s0 - 1 - m, s0 - 1 - m, 0.5], back: [s1 + 3, s0 - 2 - m, 1.4] };
-  const signs = Object.keys(LV.signs);
-  const where = signs.length === 1 ? ['right'] : signs.length === 2 ? ['left', 'right'] : ['left', 'back', 'right'];
-  const islands = [{ name: 'start', x0: s0, z0: s0, nx: n0, nz: n0, top: 0 }];
-  signs.forEach((sign, i) => {
-    const [x0, z0, top] = places[where[i]];
-    islands.push({ name: sign, sign, x0, z0, nx: m, nz: m, top });
+  // ---- The islands, laid as the game lays its maps: blocks a unit wide, each cell at its own height (half units:
+  // '0' the island's foot, '1' half a block up, '8' four blocks up), '.' none. A Linker steps up or down half a block
+  // at most; a cell under a prop is not walked. A moving island goes to and fro along its way; whoever stands on it
+  // goes with it.
+  const EDGES = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+  const islands = LV.islands.map((d, n) => {
+    const isl = { name: d.sign || (d.start ? 'start' : `isle${n}`), sign: d.sign, start: !!d.start, base: new THREE.Vector3(...d.at),
+      cells: new Map(), move: d.move || null, props: d.props || [] };
+    d.map.forEach((row, j) => [...row].forEach((ch, i) => {
+      if (ch === '.' || ch === ' ') return;
+      const lvl = parseInt(ch, 10);
+      isl.cells.set(`${i},${j}`, { i, j, lvl, top: lvl * 0.5, blocked: false, island: isl });
+    }));
+    for (const p of isl.props) for (const [i, j] of p.block || [p.cell]) { const c = isl.cells.get(`${i},${j}`); if (c) c.blocked = true; }
+    isl.group = new THREE.Group();
+    isl.group.position.copy(isl.base);
+    world.add(isl.group);
+    return isl;
   });
+  const startIsland = islands.find((i) => i.start);
   const signIslands = islands.filter((i) => i.sign);
-  const tiles = new Map();                 // "x,z" -> { x, z, top, island }
-  for (const isl of islands) {
-    isl.cells = [];
-    for (let i = 0; i < isl.nx; i++) for (let j = 0; j < isl.nz; j++) {
-      const t = { x: isl.x0 + i, z: isl.z0 + j, top: isl.top, island: isl };
-      tiles.set(`${t.x},${t.z}`, t);
-      isl.cells.push(t);
+  const cellOf = (isl, i, j) => isl.cells.get(`${i},${j}`);
+  // The cell under a point of the world (and its top, in the world), on whichever island is there now.
+  function tileAt(x, z) {
+    for (const isl of islands) {
+      const g = isl.group.position;
+      const c = cellOf(isl, Math.round(x - g.x), Math.round(z - g.z));
+      if (c) return { cell: c, island: isl, top: g.y + c.top };
     }
+    return null;
   }
-  const tileAt = (x, z) => tiles.get(`${Math.round(x)},${Math.round(z)}`);
+  const cellWorld = (c, out = new THREE.Vector3()) => out.set(c.island.group.position.x + c.i, c.island.group.position.y + c.top, c.island.group.position.z + c.j);
+  const steps = (c) => EDGES.map(([dx, dz]) => cellOf(c.island, c.i + dx, c.j + dz)).filter((n) => n && !n.blocked && Math.abs(n.lvl - c.lvl) <= 1);
+  // The cells walkable from one, nearest first (with how many steps), up to `most` steps.
+  function reach(from, most = 99) {
+    const seen = new Map([[from, 0]]), out = [from];
+    for (let k = 0; k < out.length; k++) {
+      const c = out[k], d = seen.get(c);
+      if (d >= most) continue;
+      for (const n of steps(c)) if (!seen.has(n)) { seen.set(n, d + 1); out.push(n); }
+    }
+    return { cells: out, dist: seen };
+  }
+  // The way from one cell to another, step by step (empty if there is none).
+  function way(from, to) {
+    const prev = new Map([[from, null]]), q = [from];
+    for (let k = 0; k < q.length && !prev.has(to); k++) for (const n of steps(q[k])) if (!prev.has(n)) { prev.set(n, q[k]); q.push(n); }
+    if (!prev.has(to)) return [];
+    const path = [];
+    for (let c = to; c && c !== from; c = prev.get(c)) path.unshift(c);
+    return path;
+  }
 
-  // Stone: chapter 7's grassy block, its top earthy under the grass (Stylized's _Grass), faded below.
+  // Stone: chapter 7's grassy block, its top the blades' root green (what shows between them reads as more grass),
+  // faded below; a cell high up stands on a column of them down to the island's foot.
   const tileParts = meadow.tile.map((p) => ({ g: groupedGeometry(p.mesh), mat: p.mat }));
-  // (Under the blades the top is the blades' own root green, so what shows between them reads as more grass.)
   const earth = () => meadow.mats.MeadowBlades.Root.map((v) => v * 0.92);
   for (const isl of islands) {
-    const mats = tileParts.map((p) => material({ ...p.mat, TopColor: earth(p.mat.TopColor) }, shared, { objY: -(isl.top - 0.5) }));
-    for (const t of isl.cells) {
-      tileParts.forEach((p, k) => {
-        const m = new THREE.Mesh(p.g, mats[k]);
-        m.position.set(t.x, t.top - 0.5, t.z);
-        world.add(m);
-      });
+    const mats = tileParts.map((p) => material({ ...p.mat, TopColor: earth() }, shared, { objY: -(isl.base.y - 0.5) }));
+    for (const c of isl.cells.values()) {
+      const below = Math.ceil(c.top);
+      for (let k = 0; k <= below; k++) {
+        tileParts.forEach((p, n) => {
+          if (n > 0 && k < below) return;                  // the underside only under the lowest
+          const m = new THREE.Mesh(p.g, mats[n]);
+          m.position.set(c.i, c.top - 0.5 - k, c.j);
+          isl.group.add(m);
+        });
+      }
     }
   }
 
   // ---- The grass, by the game's rules (LevelBuilder.Meadow.GrowMeadow, the meadow covered all over): a 28 x 28
-  // scatter on each top, a clump or two as tall as the Linker; at an open edge the blades lean out over it and a
-  // few hang down the side.
+  // scatter on each top, a clump or two as tall as the Linker; where a top has nothing beside it, or a lower one,
+  // the blades lean out over the edge and a few hang down the side.
   let seed = 7;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-  const blades = [];
-  const EDGES = [[0, 1], [1, 0], [0, -1], [-1, 0]];
   const DENSITY = matchMedia('(pointer: coarse)').matches ? 0.6 : 1;   // as the game's; lighter on a phone
-  for (const t of tiles.values()) {
-    const open = EDGES.filter(([dx, dz]) => !tiles.has(`${t.x + dx},${t.z + dz}`));
-    const tall = [];
-    for (let k = 0; k < 2; k++) { const tx = rnd() - 0.5, tz = rnd() - 0.5; if (rnd() < 0.45) tall.push([tx, tz]); }
-    const grid = 28;
-    for (let i = 0; i < grid; i++) for (let j = 0; j < grid; j++) {
-      if (rnd() > 0.9 * DENSITY) continue;
-      const lx = (i + rnd()) / grid - 0.5, lz = (j + rnd()) / grid - 0.5;
-      let x = t.x + lx, z = t.z + lz;
-      let h = (0.09 + 0.17 * Math.pow(rnd(), 1.5)) * 1.15;
-      if (tall.some(([cx, cz]) => (cx - lx) ** 2 + (cz - lz) ** 2 < 0.13 * 0.13)) h = 0.34 + 0.3 * rnd();
-      let lean = rnd() * 22, toward = rnd() * Math.PI * 2;
-      const yaw = rnd() * Math.PI * 2;
-      for (const [dx, dz] of open) {
-        const d = 0.5 - (dx ? dx * lx : dz * lz);
-        if (d > 0.14) continue;
-        const k = 1 - d / 0.14;
-        lean = lean + (35 + 40 * rnd() - lean) * k;
-        toward = Math.atan2(dx, dz) + (rnd() - 0.5) * 0.9;
-        x += dx * 0.03 * k; z += dz * 0.03 * k;
-      }
-      blades.push([x, t.top - 0.005, z, h, yaw, lean, toward]);
-    }
-    for (const [dx, dz] of open) {
-      for (let k = 0; k < 18; k++) {
-        const s = rnd() - 0.5;
-        if (rnd() > 0.65 * DENSITY) continue;
-        const x = t.x + dx * 0.505 + dz * s, z = t.z + dz * 0.505 - dx * s;
-        blades.push([x, t.top - 0.01 - rnd() * 0.02, z, 0.1 + 0.18 * rnd(), rnd() * Math.PI * 2, 105 + 45 * rnd(), Math.atan2(dx, dz) + (rnd() - 0.5) * 0.7]);
-      }
-    }
-  }
   const grassUniforms = {
     uTime: { value: 0 },
     uWind: { value: windDir },
@@ -302,22 +334,58 @@ export async function start(root, ui) {
     uTip: { value: new THREE.Color().fromArray(meadow.mats.MeadowBlades.Tip) },
     uMini: shared.mini,
   };
-  const grass = new THREE.InstancedMesh(bladeGeometry(),
-    new THREE.ShaderMaterial({ vertexShader: GRASS_VERT, fragmentShader: GRASS_FRAG, uniforms: grassUniforms, side: THREE.DoubleSide }), blades.length);
-  {
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), qy = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), d = new THREE.Vector3();
+  const grassLook = new THREE.ShaderMaterial({ vertexShader: GRASS_VERT, fragmentShader: GRASS_FRAG, uniforms: grassUniforms, side: THREE.DoubleSide });
+  const bladeShape = bladeGeometry();
+  const openEdges = (c) => EDGES.filter(([dx, dz]) => { const n = cellOf(c.island, c.i + dx, c.j + dz); return !n || n.lvl < c.lvl; });
+  for (const isl of islands) {
+    const blades = [];
+    for (const c of isl.cells.values()) {
+      const open = openEdges(c);
+      const tall = [];
+      for (let k = 0; k < 2; k++) { const tx = rnd() - 0.5, tz = rnd() - 0.5; if (rnd() < 0.45) tall.push([tx, tz]); }
+      const grid = 28;
+      for (let i = 0; i < grid; i++) for (let j = 0; j < grid; j++) {
+        if (rnd() > 0.9 * DENSITY) continue;
+        const lx = (i + rnd()) / grid - 0.5, lz = (j + rnd()) / grid - 0.5;
+        let x = c.i + lx, z = c.j + lz;
+        let h = (0.09 + 0.17 * Math.pow(rnd(), 1.5)) * 1.15;
+        if (tall.some(([cx, cz]) => (cx - lx) ** 2 + (cz - lz) ** 2 < 0.13 * 0.13)) h = 0.34 + 0.3 * rnd();
+        let lean = rnd() * 22, toward = rnd() * Math.PI * 2;
+        const yaw = rnd() * Math.PI * 2;
+        for (const [dx, dz] of open) {
+          const d = 0.5 - (dx ? dx * lx : dz * lz);
+          if (d > 0.14) continue;
+          const k = 1 - d / 0.14;
+          lean = lean + (35 + 40 * rnd() - lean) * k;
+          toward = Math.atan2(dx, dz) + (rnd() - 0.5) * 0.9;
+          x += dx * 0.03 * k; z += dz * 0.03 * k;
+        }
+        blades.push([x, c.top - 0.005, z, h, yaw, lean, toward]);
+      }
+      for (const [dx, dz] of open) {
+        for (let k = 0; k < 18; k++) {
+          const s = rnd() - 0.5;
+          if (rnd() > 0.65 * DENSITY) continue;
+          const x = c.i + dx * 0.505 + dz * s, z = c.j + dz * 0.505 - dx * s;
+          blades.push([x, c.top - 0.01 - rnd() * 0.02, z, 0.1 + 0.18 * rnd(), rnd() * Math.PI * 2, 105 + 45 * rnd(), Math.atan2(dx, dz) + (rnd() - 0.5) * 0.7]);
+        }
+      }
+    }
+    const grass = new THREE.InstancedMesh(bladeShape, grassLook, blades.length);
+    const m = new THREE.Matrix4(), qb = new THREE.Quaternion(), qy = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), dv = new THREE.Vector3();
     blades.forEach(([x, y, z, h, yaw, lean, toward], i) => {
       const a = THREE.MathUtils.degToRad(lean);
-      d.set(Math.sin(toward) * Math.sin(a), Math.cos(a), Math.cos(toward) * Math.sin(a)).normalize();
-      q.setFromUnitVectors(Y, d).multiply(qy.setFromAxisAngle(Y, yaw));
-      m.compose(p.set(x, y, z), q, s.set(1, h, 1));
+      dv.set(Math.sin(toward) * Math.sin(a), Math.cos(a), Math.cos(toward) * Math.sin(a)).normalize();
+      qb.setFromUnitVectors(Y, dv).multiply(qy.setFromAxisAngle(Y, yaw));
+      m.compose(pv.set(x, y, z), qb, sv.set(1, h, 1));
       grass.setMatrixAt(i, m);
     });
+    grass.frustumCulled = false;
+    isl.group.add(grass);
   }
-  grass.frustumCulled = false;
-  world.add(grass);
 
-  // ---- Flowers in drifts (one kind to a stretch) and vines down the open edges, swaying in the wind.
+  // ---- Flowers in drifts (one kind to a stretch), vines down the high open edges, and the props (the meadow's
+  // ruins and sign stones), all swaying in the wind but the stones.
   const pieceMat = (name) => material(meadow.mats[name] || meadow.mats.MeadowStem, shared);
   const pieceMats = {};
   const pieces = {};
@@ -327,6 +395,7 @@ export async function start(root, ui) {
   }
   const swayers = [];
   let bloomed = false;
+  // (x, y, z in the island's own space.)
   function plant(name, x, y, z, scale, yaw, lean, island, grow = 1, after = 0) {
     const stem = new THREE.Group();
     stem.position.set(x, y, z);
@@ -334,7 +403,7 @@ export async function start(root, ui) {
     mesh.rotation.y = yaw;
     mesh.scale.setScalar(scale);
     stem.add(mesh);
-    world.add(stem);
+    island.group.add(stem);
     const s = { stem, lean: THREE.MathUtils.degToRad(lean), phase: x * 1.7 + z * 1.3, island, grow, bloom: grow < 1, born: performance.now() + after, scale };
     if (grow < 1) stem.scale.setScalar(0.001);
     swayers.push(s);
@@ -343,26 +412,37 @@ export async function start(root, ui) {
   const FLOWERS = ['Daisy', 'PinkFlower', 'Buttercup'];
   const flowerPlan = [];
   const VINES = ['VineLong', 'VineMid', 'VineShort'];
-  for (const t of tiles.values()) {
-    for (const [dx, dz] of EDGES) {
-      if (tiles.has(`${t.x + dx},${t.z + dz}`)) continue;
-      for (let k = 0; k < 3; k++) {
-        if (rnd() > 0.6) continue;
-        const s = (k - 1) * 0.3 + (rnd() - 0.5) * 0.2;
-        plant(VINES[Math.floor(rnd() * 3)], t.x + dx * 0.512 + dz * s, t.top - 0.015, t.z + dz * 0.512 - dx * s,
-          0.85 + rnd() * 0.35, Math.atan2(dx, dz), 4, t.island);
+  for (const isl of islands) {
+    for (const c of isl.cells.values()) {
+      for (const [dx, dz] of EDGES) {
+        const n = cellOf(isl, c.i + dx, c.j + dz);
+        if (n && c.lvl - n.lvl < 2) continue;                // vines only down a drop of a block or more
+        for (let k = 0; k < 3; k++) {
+          if (rnd() > 0.6) continue;
+          const s = (k - 1) * 0.3 + (rnd() - 0.5) * 0.2;
+          plant(VINES[Math.floor(rnd() * 3)], c.i + dx * 0.512 + dz * s, c.top - 0.015, c.j + dz * 0.512 - dx * s,
+            0.85 + rnd() * 0.35, Math.atan2(dx, dz), 4, isl);
+        }
+      }
+      if (c.blocked) continue;
+      for (let k = 0; k < 7; k++) {
+        const lx = rnd() - 0.5, lz = rnd() - 0.5;
+        if (rnd() > 0.4) continue;
+        const x = c.i + lx, z = c.j + lz;
+        const kind = clamp(Math.floor(grassNoise(x * 0.7 + isl.base.x, z * 0.7 + isl.base.z, 12.5) * 3.4), 0, 2);
+        // The islands the Linkers do not start on have no flowers until full of their own (see count()).
+        const f = [FLOWERS[kind], x, c.top, z, 1.9 + rnd() * 0.7, rnd() * Math.PI * 2, isl];
+        if (!isl.sign) plant(f[0], f[1], f[2], f[3], f[4], f[5], 10, f[6]);
+        else flowerPlan.push(f);
       }
     }
-    for (let k = 0; k < 7; k++) {
-      const lx = rnd() - 0.5, lz = rnd() - 0.5;
-      if (rnd() > 0.4) continue;
-      const x = t.x + lx, z = t.z + lz;
-      const kind = clamp(Math.floor(grassNoise(x * 0.7, z * 0.7, 12.5) * 3.4), 0, 2);
-      // The island the Linkers live on has its flowers; the far one none until every Linker is across (then
-      // these come up, see count()).
-      const f = [FLOWERS[kind], x, t.top, z, 1.9 + rnd() * 0.7, rnd() * Math.PI * 2, t.island];
-      if (!t.island.sign) plant(f[0], f[1], f[2], f[3], f[4], f[5], 10, f[6]);
-      else flowerPlan.push(f);
+    for (const p of isl.props) {
+      const c = cellOf(isl, p.cell[0], p.cell[1]);
+      const mesh = new THREE.Mesh(pieces[p.piece], pieceMats[p.piece]);
+      mesh.position.set(p.cell[0] + (p.dx || 0), (c ? c.top : 0) + (p.dy || 0), p.cell[1] + (p.dz || 0));
+      mesh.rotation.y = THREE.MathUtils.degToRad(p.yaw || 0);
+      mesh.scale.setScalar(p.scale || 1);
+      isl.group.add(mesh);
     }
   }
 
@@ -429,7 +509,7 @@ export async function start(root, ui) {
     linkers.push({
       shade, sign, puzzledAt: -1e9,
       holder, model, bones, mixer, idle, walk, blink, rest,
-      island: islands[0], home: islands[0],
+      island: null, home: null, path: [],
       pos: new THREE.Vector3(), heading: Math.random() * Math.PI * 2, target: null,
       state: 'idle', until: 0, walkW: 0,
       anchor: new THREE.Vector3(), vel: new THREE.Vector3(), lastVel: new THREE.Vector3(), swing: 0, swingVel: 0,
@@ -438,18 +518,20 @@ export async function start(root, ui) {
     });
   }
   function spot(isl, avoid) {
-    for (let k = 0; k < 20; k++) {
-      const t = isl.cells[Math.floor(Math.random() * isl.cells.length)];
-      const p = new THREE.Vector3(t.x + (Math.random() - 0.5) * 0.7, t.top, t.z + (Math.random() - 0.5) * 0.7);
+    const free = [...isl.cells.values()].filter((c) => !c.blocked);
+    const home = isl === startIsland ? reach(free[0]).cells : free;
+    for (let k = 0; k < 30; k++) {
+      const c = home[Math.floor(Math.random() * home.length)];
+      const p = cellWorld(c).add(tmp.set((Math.random() - 0.5) * 0.5, 0, (Math.random() - 0.5) * 0.5));
       if (!avoid || linkers.every((o) => o === avoid || o.pos.distanceTo(p) > 0.5)) return p;
     }
-    const t = isl.cells[0];
-    return new THREE.Vector3(t.x, t.top, t.z);
+    return cellWorld(home[0]);
   }
   function reset() {
     for (const l of linkers) {
-      l.island = l.home = islands[0];
-      l.pos.copy(spot(islands[0], l));
+      l.island = l.home = startIsland;
+      l.pos.copy(spot(startIsland, l));
+      l.path = [];
       l.state = 'idle'; l.until = performance.now() + Math.random() * 2000;
     }
     for (const s of swayers.filter((s) => s.bloom)) world.remove(s.stem);
@@ -480,7 +562,8 @@ export async function start(root, ui) {
   })();
   const coreLook = material({ shader: 'unlit', BaseColor: [1, 0.84, 0.42] }, shared);
   for (const isl of signIslands) {
-    const mid = new THREE.Vector3(isl.x0 + (isl.nx - 1) / 2, isl.top + 2.3, isl.z0 + (isl.nz - 1) / 2);
+    const cs = [...isl.cells.values()];
+    const mid = new THREE.Vector3(cs.reduce((a, c) => a + c.i, 0) / cs.length, Math.max(...cs.map((c) => c.top)) + 2.3, cs.reduce((a, c) => a + c.j, 0) / cs.length);
     const core = new THREE.Group();
     core.position.copy(mid);
     const body = new THREE.Mesh(signGeometry(isl.sign, isl.sign === 'triangle' ? 0.95 : 0.78, 0.16, 0.14), coreLook);
@@ -488,7 +571,7 @@ export async function start(root, ui) {
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     glow.scale.setScalar(3.2);
     core.add(glow);
-    world.add(core);
+    isl.group.add(core);
     const label = document.createElement('div');
     label.className = 'core-count';
     root.appendChild(label);
@@ -497,7 +580,7 @@ export async function start(root, ui) {
 
   // ---- The clouds: a sea of them under the islands (not a band across the screen), the colour of the sky's foot,
   // thinning out far off into the sky; the islands' roots and a dropped Linker go down into it.
-  const lowest = Math.min(...islands.map((i) => i.top));
+  const lowest = Math.min(...islands.map((i) => i.base.y));
   // (Two layers of soft heaped cloud, lit warm from above and blue-grey in their hollows, drifting slowly.)
   // (A hash without sin, which some phones' GPUs compute too coarsely to make any cloud at all.)
   const CLOUD_FRAG = `precision highp float;
@@ -531,13 +614,20 @@ export async function start(root, ui) {
   // ---- The view.
   // Framed on this stage's islands: their middle, wide enough for all of them across the screen.
   let spanLo = Infinity, spanHi = -Infinity;
+  const tmpV = new THREE.Vector3();
   const centre = new THREE.Vector3();
-  for (const t of tiles.values()) {
-    const u = t.x * R.x + t.z * R.z;
+  let cellCount = 0;
+  const lo = new THREE.Vector3(Infinity, 0, Infinity), hi = new THREE.Vector3(-Infinity, 0, -Infinity);
+  for (const isl of islands) for (const c of isl.cells.values()) for (const k of isl.move ? [-1, 1] : [0]) {
+    const x = isl.base.x + c.i + (isl.move ? isl.move.dir[0] * isl.move.amp * k / Math.hypot(...isl.move.dir) : 0);
+    const z = isl.base.z + c.j + (isl.move ? isl.move.dir[2] * isl.move.amp * k / Math.hypot(...isl.move.dir) : 0);
+    const u = x * R.x + z * R.z;
     spanLo = Math.min(spanLo, u); spanHi = Math.max(spanHi, u);
-    centre.x += t.x; centre.z += t.z; centre.y += t.top;
+    lo.min(tmpV.set(x, 0, z)); hi.max(tmpV.set(x, 0, z));
+    centre.x += x; centre.z += z; centre.y += isl.base.y + c.top;
+    cellCount++;
   }
-  centre.divideScalar(tiles.size);
+  centre.divideScalar(cellCount);
   centre.y += 1.1;                          // (looking a little higher: the cores above the islands, clear of the heading)
   const spanW = spanHi - spanLo + 3.2;
   const tcentre = centre.clone();
@@ -546,7 +636,7 @@ export async function start(root, ui) {
     const w = root.clientWidth, h = root.clientHeight;
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
-    fitH = Math.max(spanW * 0.55, spanW / (w / h));
+    fitH = Math.max(9, spanW * 0.55, spanW / (w / h));
   }
   function place() {
     const w = root.clientWidth, h = root.clientHeight;
@@ -624,7 +714,7 @@ export async function start(root, ui) {
     held.vel.set(0, 0, 0); held.lastVel.set(0, 0, 0);
     held.swing = 0; held.swingVel = 0;
     held.plane = held.anchor.clone();
-    held.carryTop = held.island.top;
+    held.carryTop = held.pos.y;
     samples.length = 0;
     document.documentElement.style.cursor = 'grabbing';
     tell('grab');
@@ -681,7 +771,7 @@ export async function start(root, ui) {
     const k = viewH / canvas.clientHeight;
     // Across the screen along its right; up the screen into it along the ground.
     tcentre.addScaledVector(R, -dx * k).addScaledVector(fwdLevel, dy * k / Math.max(0.35, Math.sin(look.pitch)));
-    tcentre.x = clamp(tcentre.x, -9, 5); tcentre.z = clamp(tcentre.z, -9, 5);
+    tcentre.x = clamp(tcentre.x, lo.x - 2, hi.x + 2); tcentre.z = clamp(tcentre.z, lo.z - 2, hi.z + 2);
   }
 
   const letGo = (e) => {
@@ -705,19 +795,12 @@ export async function start(root, ui) {
     bone.parent.getWorldQuaternion(qParent);
     bone.quaternion.premultiply(qParent.clone().invert().multiply(qq).multiply(qParent));
   }
-  const inside = (isl, x, z, margin = 0.38) =>
-    x > isl.x0 - 0.5 + margin && x < isl.x0 + isl.nx - 0.5 - margin && z > isl.z0 - 0.5 + margin && z < isl.z0 + isl.nz - 0.5 - margin;
-  const keepIn = (isl, p, margin = 0.38) => {
-    p.x = clamp(p.x, isl.x0 - 0.5 + margin, isl.x0 + isl.nx - 0.5 - margin);
-    p.z = clamp(p.z, isl.z0 - 0.5 + margin, isl.z0 + isl.nz - 0.5 - margin);
-    return p;
-  };
-
   function ground(l, now, dt) {
-    const isl = l.island;
-    // Running from the pointer: when it hovers near (a moment to notice), away from it, kept on the island.
-    // (How near the pointer is, as the reader sees it: on the screen, from the Linker's middle; turned into a way
-    // over the ground: across the screen along its right, up the screen into it.)
+    const here = tileAt(l.pos.x, l.pos.z);
+    const cell = here && here.island === l.island ? here.cell : null;
+    // Running from the pointer: when it hovers near (a moment to notice), to the cell nearby that is most away from
+    // it. (How near, as the reader sees it: on the screen, from the Linker's middle; turned into a way over the
+    // ground: across the screen along its right, up the screen into it.)
     let away = null;
     if (LV.flee > 0 && pointer.here && !pointer.touch && now - pointer.at < 1500 && !held && !drags.size && l.scr) {
       const sx = l.scr.x - pointer.x, sy = l.scr.y - pointer.y;
@@ -729,50 +812,71 @@ export async function start(root, ui) {
         away.normalize();
       }
     }
-    if (away) {
+    if (away && cell) {
       if (l.state !== 'flee' && !l.fleeAt) l.fleeAt = now + l.react * 1000;
       if (now >= l.fleeAt) {
         if (l.state !== 'flee') l.hopAt = now;
         l.state = 'flee';
-        l.target = keepIn(isl, l.pos.clone().addScaledVector(away, 2));
-        // Cornered at an edge: slip along it, to whichever side is open.
-        if (l.target.distanceTo(l.pos) < 0.5) {
-          const side = tmp2.set(-away.z, 0, away.x);
-          const a = keepIn(isl, l.pos.clone().addScaledVector(side, 1.6)), b = keepIn(isl, l.pos.clone().addScaledVector(side, -1.6));
-          l.target = a.distanceTo(l.pos) > b.distanceTo(l.pos) ? a : b;
+        if (!l.path.length || now - (l.fleeAim || 0) > 250) {
+          l.fleeAim = now;
+          let best = null, bestScore = 0.15;
+          const { cells, dist } = reach(cell, 4);
+          for (const c of cells) {
+            const d = cellWorld(c, tmp2).sub(l.pos); d.y = 0;
+            const len = d.length();
+            if (len < 0.3) continue;
+            const score = d.dot(away) / len * Math.min(len, 2.2) - dist.get(c) * 0.05;
+            if (score > bestScore) { best = c; bestScore = score; }
+          }
+          if (best) l.path = way(cell, best);
         }
       }
     } else {
       l.fleeAt = 0;
-      if (l.state === 'flee') { l.state = 'idle'; l.until = now + 500 + Math.random() * 1000; }
+      if (l.state === 'flee') { l.state = 'idle'; l.path = []; l.until = now + 500 + Math.random() * 1000; }
     }
     // Running tires it: a long chase slows it down; resting brings the breath back.
     l.tired = clamp((l.tired || 0) + (l.state === 'flee' ? dt / 3.5 : -dt / 2.5), 0, 1);
-    if (l.state === 'idle' && now > l.until) { l.state = 'walk'; l.target = spot(isl, l); }
+    if (l.state === 'idle' && now > l.until && cell) {
+      const { cells } = reach(cell, 6);
+      const to = cells[Math.floor(Math.random() * cells.length)];
+      l.path = to === cell ? [] : way(cell, to);
+      if (l.path.length) l.state = 'walk'; else l.until = now + 1200;
+    }
     let speed = 0;
-    if (l.state === 'walk' || l.state === 'flee') {
-      const to = tmp.set(l.target.x - l.pos.x, 0, l.target.z - l.pos.z);
+    if ((l.state === 'walk' || l.state === 'flee') && l.path.length) {
+      const next = cellWorld(l.path[0], tmp2);
+      const to = tmp.set(next.x - l.pos.x, 0, next.z - l.pos.z);
       const d = to.length();
-      if (d < 0.06) {
-        if (l.state === 'walk') { l.state = 'idle'; l.until = now + 1500 + Math.random() * 2600; }
+      if (d < 0.07) {
+        l.path.shift();
+        if (!l.path.length && l.state === 'walk') { l.state = 'idle'; l.until = now + 1500 + Math.random() * 2600; }
       } else {
         speed = l.state === 'flee' ? 2.6 * LV.flee * (1 - 0.55 * l.tired) : 0.55;
         to.divideScalar(d);
         const want = Math.atan2(to.x, to.z);
-        let turn = ((want - l.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-        l.heading += clamp(turn, -dt * (l.state === 'flee' ? 16 : 9), dt * (l.state === 'flee' ? 16 : 9));
+        const turn = ((want - l.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        const rate = l.state === 'flee' ? 16 : 9;
+        l.heading += clamp(turn, -dt * rate, dt * rate);
         const step = Math.min(d, speed * dt * clamp(1 - Math.abs(turn) / 2.6, 0.45, 1));
         l.pos.x += Math.sin(l.heading) * step; l.pos.z += Math.cos(l.heading) * step;
       }
+    } else if (l.state === 'walk') {
+      l.state = 'idle'; l.until = now + 1000;
     }
-    // Not into one another.
+    // Not into one another (but not pushed off where it may stand).
     for (const o of linkers) {
       if (o === l || o.island !== l.island || !['idle', 'walk', 'flee'].includes(o.state)) continue;
       const dx = l.pos.x - o.pos.x, dz = l.pos.z - o.pos.z, d = Math.hypot(dx, dz);
-      if (d > 0 && d < 0.42) { l.pos.x += dx / d * (0.42 - d) * 0.5; l.pos.z += dz / d * (0.42 - d) * 0.5; }
+      if (d > 0 && d < 0.42) {
+        const nx = l.pos.x + dx / d * (0.42 - d) * 0.5, nz = l.pos.z + dz / d * (0.42 - d) * 0.5;
+        const t = tileAt(nx, nz);
+        if (t && t.island === l.island && !t.cell.blocked && cell && Math.abs(t.cell.lvl - cell.lvl) <= 1) { l.pos.x = nx; l.pos.z = nz; }
+      }
     }
-    keepIn(isl, l.pos, 0.3);
-    l.pos.y = isl.top;
+    // On the cell under its feet: stepping up or down half a block smoothly.
+    const under = tileAt(l.pos.x, l.pos.z);
+    if (under && under.island === l.island) l.pos.y = damp(l.pos.y, under.top, 16, dt);
     l.walkW = damp(l.walkW, speed > 0 ? 1 : 0, 8, dt);
     l.walk.setEffectiveWeight(l.walkW);
     l.idle.setEffectiveWeight(1 - l.walkW);
@@ -792,7 +896,7 @@ export async function start(root, ui) {
     // below it (the island under its feet, where its shadow falls; over the gap, the last island's height).
     const o = ray(pointer.x, pointer.y);
     const on = (h) => o.clone().addScaledVector(fwd, (h - o.y) / Math.min(fwd.y, -0.05));
-    if (l.carryTop === undefined) l.carryTop = l.island.top;
+    if (l.carryTop === undefined) l.carryTop = l.island.base.y;
     let p = on(l.carryTop + CARRY + H);
     for (let k = 0; k < 2; k++) {
       const t = tileAt(p.x, p.z);
@@ -852,8 +956,13 @@ export async function start(root, ui) {
     // Down onto an island's top: on its feet, on that island now.
     if (t && prevY >= t.top - 1e-3 && feet.y <= t.top && l.vel.y < 0) {
       l.pos.set(feet.x, t.top, feet.z);
-      keepIn(t.island, l.pos, 0.3);
+      if (t.cell.blocked) {
+        const free = [...t.island.cells.values()].filter((c) => !c.blocked)
+          .sort((a, b) => cellWorld(a, tmp).distanceTo(feet) - cellWorld(b, tmp2).distanceTo(feet))[0];
+        if (free) cellWorld(free, l.pos);
+      }
       l.island = t.island;
+      l.path = [];
       l.state = 'idle'; l.until = now + 900 + Math.random() * 1200;
       l.landAt = now; l.blinkAt = now + 40; l.swing = 0; l.swingVel = 0; l.fleeAt = 0;
       if (t.island.sign && t.island.sign !== l.sign) { l.puzzledAt = now; l.until = now + 2200; }
@@ -884,11 +993,12 @@ export async function start(root, ui) {
         // Full of its own: the island blooms, its flowers coming up in drifts from its middle.
         const later = (x, z) => Math.hypot(x - isl.mid.x, z - isl.mid.z) * 160 + Math.random() * 300;
         for (const [name, x, y, z, scale, yaw, island] of flowerPlan) if (island === isl) plant(name, x, y, z, scale, yaw, 10, island, 0, later(x, z));
-        for (const t of isl.cells) {
+        for (const c of isl.cells.values()) {
+          if (c.blocked) continue;
           for (let k = 0; k < 3; k++) {
-            const x = t.x + (Math.random() - 0.5) * 0.9, z = t.z + (Math.random() - 0.5) * 0.9;
-            const kind = clamp(Math.floor(grassNoise(x * 0.7, z * 0.7, 12.5) * 3.4), 0, 2);
-            plant(FLOWERS[kind], x, t.top, z, 2 + Math.random() * 0.8, Math.random() * 6.3, 10, t.island, 0, later(x, z));
+            const x = c.i + (Math.random() - 0.5) * 0.9, z = c.j + (Math.random() - 0.5) * 0.9;
+            const kind = clamp(Math.floor(grassNoise(x * 0.7 + isl.base.x, z * 0.7 + isl.base.z, 12.5) * 3.4), 0, 2);
+            plant(FLOWERS[kind], x, c.top, z, 2 + Math.random() * 0.8, Math.random() * 6.3, 10, isl, 0, later(x, z));
           }
         }
       }
@@ -948,6 +1058,15 @@ export async function start(root, ui) {
     for (const c of cloudLayers) { c.material.uniforms.uCentre.value.set(centre.x, centre.z); c.material.uniforms.uTime.value = now / 1000; }
     place();
     windDir.lerp(tmp.set(fwd.x, 0, fwd.z).normalize(), 1 - Math.exp(-3 * dt)).normalize();
+    for (const isl of islands) {
+      if (!isl.move) continue;
+      const m = isl.move, len = Math.hypot(...m.dir);
+      const s = Math.sin(now / 1000 * Math.PI * 2 / m.period) * m.amp / len;
+      const before = tmpV.copy(isl.group.position);
+      isl.group.position.set(isl.base.x + m.dir[0] * s, isl.base.y + m.dir[1] * s, isl.base.z + m.dir[2] * s);
+      const delta = before.subVectors(isl.group.position, before);
+      for (const l of linkers) if (l.island === isl && ['idle', 'walk', 'flee'].includes(l.state)) l.pos.add(delta);
+    }
     for (const l of linkers) l.scr = toScreen(l.pos.clone().addScaledVector(Y, H * 0.5));
     if (ring) {
       const l = linkers[0];
@@ -963,7 +1082,7 @@ export async function start(root, ui) {
       isl.core.position.copy(isl.mid).addScaledVector(Y, 0.08 * Math.sin(now / 900 + isl.spin));
       isl.body.rotation.y = isl.spin + now / 2600;
       isl.glow.material.opacity = isl.full ? 1 : 0.7;
-      const p = toScreen(isl.core.position);
+      const p = toScreen(isl.core.getWorldPosition(tmp));
       isl.label.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
     }
     acc += dt;
