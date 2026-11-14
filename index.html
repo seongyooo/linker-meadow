@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>초원 섬 · 링커 나누기</title>
+<meta name="description" content="세모네모의 링커들을 가슴의 문양대로 초원 섬에 나눠 주는 작은 놀이. 잡고, 던지고, 제자리를 찾아 주세요.">
+<meta property="og:title" content="초원 섬 · 링커 나누기">
+<meta property="og:description" content="세모네모의 링커들을 가슴의 문양대로 초원 섬에 나눠 주는 작은 놀이.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://seongyooo.github.io/linker-meadow/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#5596D6">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<style>
+  :root { --ink: #242A4A; --ink-2: #4A4F6E; --gold: #FFDB80; --gold-ink: #A8681F; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: linear-gradient(180deg, #5596D6 0%, #7FB0DF 26%, #B4C8D2 52%, #DCDDD6 72%, #E7E6DE 100%);
+    color: var(--ink); font: 500 15px/1.4 "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  .mist { position: fixed; left: 0; right: 0; bottom: 0; height: 30vh; pointer-events: none;
+    background: linear-gradient(180deg, rgba(231, 230, 222, 0) 0%, rgba(231, 230, 222, .8) 60%, #E7E6DE 100%); }
+
+  /* The stage and how far it is, at the top. */
+  .head { position: fixed; top: max(16px, env(safe-area-inset-top)); left: 0; right: 0; text-align: center; pointer-events: none;
+    color: #fff; text-shadow: 0 1px 10px rgba(36, 42, 74, .35); }
+  .head small { display: block; font: 400 12px/1 "Tenor Sans", Georgia, serif; letter-spacing: .3em; opacity: .9; }
+  .head b { display: block; font: 400 clamp(28px, 4.6vw, 40px)/1.15 "Tenor Sans", Georgia, serif; letter-spacing: .06em; margin-top: 6px; }
+  .head span { display: block; font-size: 14px; margin-top: 4px; }
+
+  /* Each core's count, in the core's middle. */
+  .core-count { position: absolute; left: 0; top: 0; pointer-events: none; font: 400 22px/1 "Tenor Sans", Georgia, serif;
+    color: #fff; letter-spacing: .04em; text-shadow: 0 0 8px rgba(168, 104, 31, .9), 0 1px 3px rgba(36, 42, 74, .5); white-space: nowrap; }
+  .core-count.full { color: #FFF4D6; text-shadow: 0 0 14px rgba(255, 200, 90, 1), 0 1px 3px rgba(36, 42, 74, .5); }
+
+  /* A cue for the hands, at the foot: a small picture of the mouse (or a finger) and a line. */
+  .cue { position: fixed; left: 50%; bottom: max(26px, 6vh); transform: translate(-50%, 8px); display: flex; align-items: center; gap: 12px;
+    padding: 10px 18px 10px 12px; border-radius: 22px; background: rgba(251, 248, 241, .94); box-shadow: 0 12px 30px -16px rgba(36, 42, 74, .6);
+    white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .45s ease, transform .45s ease; }
+  .cue.on { opacity: 1; transform: translate(-50%, 0); }
+  .cue svg { width: 34px; height: 34px; flex: none; }
+  .cue .body { fill: #fff; stroke: var(--ink); stroke-width: 1.6; }
+  .cue .btn { fill: none; }
+  .cue .lit { fill: var(--gold); animation: lit 1.2s ease-in-out infinite; }
+  .cue .move { fill: none; stroke: var(--gold-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; animation: move 1.4s ease-in-out infinite; }
+  @keyframes lit { 50% { opacity: .35; } }
+  @keyframes move { 0% { transform: translateX(-3px); opacity: .3; } 60% { transform: translateX(3px); opacity: 1; } 100% { transform: translateX(3px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .cue .lit, .cue .move { animation: none; } }
+
+  .done { position: fixed; left: 50%; bottom: max(26px, 6vh); transform: translate(-50%, 10px); display: flex; gap: 12px; align-items: center;
+    padding: 10px 12px 10px 18px; border-radius: 22px; background: rgba(251, 248, 241, .96); box-shadow: 0 14px 34px -16px rgba(36, 42, 74, .6);
+    opacity: 0; pointer-events: none; transition: opacity .5s ease, transform .5s ease; white-space: nowrap; }
+  .done.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .done button { font: inherit; color: #fff; background: var(--ink); border: 0; border-radius: 16px; padding: 7px 16px; cursor: pointer; }
+  .done button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  body.og .head, body.og .cue, body.og .core-count { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="mist"></div>
+<div class="head"><small id="stageNo">STAGE 1</small><b id="count">0 / 2</b><span id="hint"></span></div>
+<div class="cue" id="cue" role="status"><svg id="cuePic" viewBox="0 0 34 34" aria-hidden="true"></svg><span id="cueText"></span></div>
+<div class="done" id="done" role="status"><span id="doneText"></span><button type="button" id="next">다음 단계</button></div>
+<script type="module">
+  import { start } from './js/meadow3d.js';
+  const $ = (id) => document.getElementById(id);
+  // (#og: the picture for a link's preview, without the words.)
+  if (location.hash === '#og') document.body.classList.add('og');
+  const touch = matchMedia('(pointer: coarse)').matches;
+
+  // The pictures: a mouse with its left or right button lit, and an arrow for a drag or a flick; or a finger.
+  const mouse = (which, arrow) => `
+    <rect class="body" x="9" y="5" width="16" height="24" rx="8"/>
+    <path class="btn" d="M17 5v9M9 14h16" stroke="#242A4A" stroke-width="1.6"/>
+    ${which ? `<path class="lit" d="${which === 'left' ? 'M17 5.8a7.2 7.2 0 0 0-7.2 7.2v.2h7.2z' : 'M17 5.8a7.2 7.2 0 0 1 7.2 7.2v.2h-7.2z'}"/>` : ''}
+    ${which === 'wheel' ? '<rect class="lit" x="15.6" y="8" width="2.8" height="5" rx="1.4"/>' : ''}
+    ${arrow === 'drag' ? '<path class="move" d="M26 22h6m-2-2 2 2-2 2"/>' : ''}
+    ${arrow === 'flick' ? '<path class="move" d="M25 24c3-1 5-4 6-8m-3 0 3 0 0 3"/>' : ''}`;
+  const finger = (arrow) => `
+    <path class="body" d="M14 30v-9l-3-3c-1-1 0-3 2-2l2 2V7a2 2 0 0 1 4 0v8l6 1c1.5.3 2 1.4 1.8 2.6L25 30z"/>
+    ${arrow === 'drag' ? '<path class="move" d="M27 8h5m-2-2 2 2-2 2"/>' : ''}
+    ${arrow === 'flick' ? '<path class="move" d="M26 12c3-1 5-3 6-7m-3 0 3 0 0 3"/>' : ''}
+    ${arrow === 'pinch' ? '<path class="move" d="M4 6l4 4M32 6l-4 4"/>' : ''}`;
+
+  // What each stage teaches, cue by cue: each shown until it is done.
+  const CUES = {
+    grab: { pic: touch ? finger('drag') : mouse('left', 'drag'), text: touch ? '링커를 손가락으로 집어 끌어 보세요' : '왼쪽 버튼을 누른 채 링커를 끌어 보세요', until: 'grab' },
+    carry: { pic: touch ? finger('drag') : mouse('left', 'drag'), text: '○ 섬 위에서 놓아 주세요', until: 'drop' },
+    throw: { pic: touch ? finger('flick') : mouse('left', 'flick'), text: '휙 던져서 보내도 돼요', until: 'throw' },
+    turn: { pic: touch ? finger('drag') : mouse('right', 'drag'), text: touch ? '빈 곳을 끌면 시점이 돌아가요' : '오른쪽 버튼을 누른 채 끌면 시점이 돌아가요', until: 'turn' },
+    zoom: { pic: touch ? finger('pinch') : mouse('wheel'), text: touch ? '두 손가락으로 벌리면 가까이 보여요' : '휠로 가까이 볼 수 있어요', until: 'zoom' },
+  };
+  const PLAN = { 1: ['grab', 'carry', 'throw'], 2: ['turn', 'zoom'] };
+  let plan = [], current = null, shownAt = 0;
+  const showCue = (name) => {
+    current = name;
+    shownAt = performance.now();
+    if (!name) { $('cue').classList.remove('on'); return; }
+    $('cuePic').innerHTML = CUES[name].pic;
+    $('cueText').textContent = CUES[name].text;
+    $('cue').classList.add('on');
+  };
+  const nextCue = () => showCue(plan.shift() || null);
+
+  start($('stage'), {
+    level(n, all, hint) {
+      $('stageNo').textContent = `STAGE ${n}`;
+      $('hint').textContent = hint;
+      $('next').textContent = n < all ? '다음 단계' : '처음부터';
+      $('next').onclick = () => { location.search = `?level=${n < all ? n + 1 : 1}`; };
+      plan = [...(PLAN[n] || [])];
+      setTimeout(nextCue, n === 1 ? 900 : 1600);
+    },
+    count(n, all) { $('count').textContent = `${n} / ${all}`; },
+    event(what, d) {
+      if (!current) return;
+      const done = CUES[current].until;
+      // (A throw counts for the throw's cue; any let-go for the carry's; the first let-go that was not a throw
+      // keeps the throw's cue coming, one that was a throw skips it.)
+      if (what === 'drop' && current === 'carry') {
+        if (d.thrown) plan = plan.filter((c) => c !== 'throw');
+        nextCue();
+      } else if (what === 'drop' && current === 'throw' && d.thrown) {
+        nextCue();
+      } else if (what === done) {
+        nextCue();
+      }
+    },
+    done(n, all) {
+      showCue(null);
+      $('doneText').textContent = n < all ? '모두 제자리를 찾았어요. 섬에 꽃이 피었어요!' : '모든 단계를 마쳤어요. 초원에 꽃이 가득해요!';
+      setTimeout(() => $('done').classList.add('on'), 900);
+    },
+    again() {},
+  }).catch((e) => { document.body.dataset.error = e.message; console.error(e); });
+</script>
+</body>
+</html>
